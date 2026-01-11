@@ -4,7 +4,18 @@
 
 `lrn` (learn) is a universal CLI for learning and querying programming interfaces. It provides LLMs and developers with token-efficient access to API documentation through progressive discovery.
 
-**Core insight**: LLMs waste enormous context loading full API docs when they only need specific details. `lrn` enables hierarchical navigation (index → category → endpoint → details) that can deliver 5-10x token reduction compared to dumping full documentation.
+**Core insight**: LLMs waste enormous context loading full API docs when they only need specific details. `lrn` enables hierarchical navigation (index → category → endpoint → details) that can deliver 5-10x token reduction compared to dumping full documentation. Documentation is stored on-device for fast querying. Cli is designed to be highly compositional so that LLMs can be creative with their querying and usage optimizing at inference-time.
+
+Example:
+
+```bash
+# LLM can construct queries dynamically
+lrn stripe list --tag $(lrn stripe tags | grep -i payment) | \
+  lrn stripe show --format json | \
+  jq '[.[] | select(.method == "POST")]'
+```
+
+TODO: Show the hypothetical result from this query here, then show the comparison to do the same thing with web search or reading markdown files.
 
 ## Business Model
 
