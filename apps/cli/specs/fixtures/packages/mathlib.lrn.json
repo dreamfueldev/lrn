@@ -1,0 +1,409 @@
+{
+  "name": "mathlib",
+  "version": "2.1.0",
+  "summary": "A simple math utilities library",
+  "description": "MathLib provides common mathematical operations, vector math, and a calculator class for chained operations.",
+  "source": {
+    "type": "typescript",
+    "url": "https://github.com/example/mathlib",
+    "generatedAt": "2025-01-15T10:00:00Z"
+  },
+  "tags": ["math", "utilities"],
+  "links": {
+    "homepage": "https://mathlib.example.com",
+    "repository": "https://github.com/example/mathlib",
+    "documentation": "https://mathlib.example.com/docs"
+  },
+  "members": [
+    {
+      "name": "add",
+      "kind": "function",
+      "summary": "Add two numbers",
+      "description": "Returns the sum of two numbers. Handles both integers and floating-point values.",
+      "signature": "(a: number, b: number) => number",
+      "parameters": [
+        {
+          "name": "a",
+          "type": "number",
+          "description": "The first number",
+          "required": true
+        },
+        {
+          "name": "b",
+          "type": "number",
+          "description": "The second number",
+          "required": true
+        }
+      ],
+      "returns": {
+        "type": "number",
+        "description": "The sum of a and b"
+      },
+      "examples": [
+        {
+          "title": "Basic usage",
+          "language": "typescript",
+          "code": "import { add } from 'mathlib';\n\nconst result = add(2, 3);\nconsole.log(result); // 5",
+          "standalone": true
+        }
+      ],
+      "tags": ["arithmetic"]
+    },
+    {
+      "name": "subtract",
+      "kind": "function",
+      "summary": "Subtract two numbers",
+      "description": "Returns the difference between two numbers.",
+      "signature": "(a: number, b: number) => number",
+      "parameters": [
+        {
+          "name": "a",
+          "type": "number",
+          "description": "The number to subtract from",
+          "required": true
+        },
+        {
+          "name": "b",
+          "type": "number",
+          "description": "The number to subtract",
+          "required": true
+        }
+      ],
+      "returns": {
+        "type": "number",
+        "description": "The difference (a - b)"
+      },
+      "tags": ["arithmetic"]
+    },
+    {
+      "name": "multiply",
+      "kind": "function",
+      "summary": "Multiply two numbers",
+      "signature": "(a: number, b: number) => number",
+      "parameters": [
+        {
+          "name": "a",
+          "type": "number",
+          "required": true
+        },
+        {
+          "name": "b",
+          "type": "number",
+          "required": true
+        }
+      ],
+      "returns": {
+        "type": "number"
+      },
+      "tags": ["arithmetic"]
+    },
+    {
+      "name": "divide",
+      "kind": "function",
+      "summary": "Divide two numbers",
+      "description": "Returns the quotient of two numbers. Throws an error if dividing by zero.",
+      "signature": "(a: number, b: number) => number",
+      "parameters": [
+        {
+          "name": "a",
+          "type": "number",
+          "description": "The dividend",
+          "required": true
+        },
+        {
+          "name": "b",
+          "type": "number",
+          "description": "The divisor (must not be zero)",
+          "required": true
+        }
+      ],
+      "returns": {
+        "type": "number",
+        "description": "The quotient (a / b)"
+      },
+      "tags": ["arithmetic"]
+    },
+    {
+      "name": "sqrt",
+      "kind": "function",
+      "summary": "Calculate square root",
+      "description": "Returns the square root of a number. Returns NaN for negative inputs.",
+      "signature": "(n: number) => number",
+      "parameters": [
+        {
+          "name": "n",
+          "type": "number",
+          "description": "The number to find the square root of",
+          "required": true
+        }
+      ],
+      "returns": {
+        "type": "number",
+        "description": "The square root of n"
+      },
+      "tags": ["algebra"]
+    },
+    {
+      "name": "pow",
+      "kind": "function",
+      "summary": "Raise to a power",
+      "description": "Returns the base raised to the exponent power.",
+      "signature": "(base: number, exponent: number) => number",
+      "parameters": [
+        {
+          "name": "base",
+          "type": "number",
+          "description": "The base number",
+          "required": true
+        },
+        {
+          "name": "exponent",
+          "type": "number",
+          "description": "The exponent",
+          "required": true
+        }
+      ],
+      "returns": {
+        "type": "number"
+      },
+      "tags": ["algebra"]
+    },
+    {
+      "name": "oldSum",
+      "kind": "function",
+      "summary": "Sum numbers (deprecated)",
+      "description": "Use add() instead. This function will be removed in v3.0.",
+      "signature": "(...numbers: number[]) => number",
+      "deprecated": "Use add() for two numbers or reduce() for arrays",
+      "tags": ["arithmetic"]
+    },
+    {
+      "name": "Calculator",
+      "kind": "class",
+      "summary": "Chainable calculator for complex operations",
+      "description": "A calculator class that supports method chaining for building complex calculations.",
+      "signature": "class Calculator",
+      "parameters": [
+        {
+          "name": "initialValue",
+          "type": "number",
+          "description": "Starting value for calculations",
+          "required": false,
+          "default": 0
+        }
+      ],
+      "examples": [
+        {
+          "title": "Method chaining",
+          "language": "typescript",
+          "code": "const calc = new Calculator(10)\n  .add(5)\n  .multiply(2)\n  .subtract(3);\n\nconsole.log(calc.value); // 27",
+          "standalone": true
+        }
+      ],
+      "tags": ["calculator"],
+      "children": [
+        {
+          "name": "value",
+          "kind": "property",
+          "summary": "Current calculated value",
+          "signature": "readonly value: number"
+        },
+        {
+          "name": "add",
+          "kind": "method",
+          "summary": "Add to current value",
+          "signature": "(n: number) => Calculator",
+          "parameters": [
+            {
+              "name": "n",
+              "type": "number",
+              "required": true
+            }
+          ],
+          "returns": {
+            "type": "Calculator",
+            "description": "The calculator instance for chaining"
+          }
+        },
+        {
+          "name": "subtract",
+          "kind": "method",
+          "summary": "Subtract from current value",
+          "signature": "(n: number) => Calculator"
+        },
+        {
+          "name": "multiply",
+          "kind": "method",
+          "summary": "Multiply current value",
+          "signature": "(n: number) => Calculator"
+        },
+        {
+          "name": "divide",
+          "kind": "method",
+          "summary": "Divide current value",
+          "signature": "(n: number) => Calculator"
+        },
+        {
+          "name": "reset",
+          "kind": "method",
+          "summary": "Reset to initial value",
+          "signature": "() => Calculator"
+        }
+      ]
+    },
+    {
+      "name": "Vector",
+      "kind": "class",
+      "summary": "2D vector for geometric operations",
+      "description": "Represents a 2D vector with x and y components. Supports common vector operations.",
+      "signature": "class Vector",
+      "tags": ["geometry", "algebra"],
+      "children": [
+        {
+          "name": "x",
+          "kind": "property",
+          "summary": "X component",
+          "signature": "x: number"
+        },
+        {
+          "name": "y",
+          "kind": "property",
+          "summary": "Y component",
+          "signature": "y: number"
+        },
+        {
+          "name": "magnitude",
+          "kind": "method",
+          "summary": "Get vector length",
+          "signature": "() => number",
+          "returns": {
+            "type": "number",
+            "description": "The length of the vector"
+          }
+        },
+        {
+          "name": "normalize",
+          "kind": "method",
+          "summary": "Return unit vector",
+          "signature": "() => Vector"
+        },
+        {
+          "name": "dot",
+          "kind": "method",
+          "summary": "Dot product with another vector",
+          "signature": "(other: Vector) => number"
+        }
+      ]
+    },
+    {
+      "name": "NumberPair",
+      "kind": "type",
+      "summary": "A tuple of two numbers",
+      "signature": "type NumberPair = [number, number]",
+      "tags": ["types"]
+    },
+    {
+      "name": "CalculatorOptions",
+      "kind": "type",
+      "summary": "Options for Calculator constructor",
+      "signature": "type CalculatorOptions",
+      "tags": ["types"],
+      "see": [
+        {
+          "type": "member",
+          "target": "Calculator",
+          "label": "Calculator class"
+        }
+      ]
+    }
+  ],
+  "guides": [
+    {
+      "slug": "getting-started",
+      "title": "Getting Started with MathLib",
+      "summary": "Learn the basics of MathLib in 5 minutes",
+      "intro": "This guide will walk you through installing and using MathLib for common mathematical operations.",
+      "kind": "quickstart",
+      "level": "beginner",
+      "tags": ["tutorial"],
+      "sections": [
+        {
+          "id": "installation",
+          "title": "Installation",
+          "summary": "Install MathLib via npm",
+          "content": "Install MathLib using your preferred package manager:\n\n```bash\nnpm install mathlib\n```\n\nOr with yarn:\n\n```bash\nyarn add mathlib\n```",
+          "examples": [
+            {
+              "title": "Import the library",
+              "language": "typescript",
+              "code": "import { add, subtract, Calculator } from 'mathlib';",
+              "standalone": false
+            }
+          ]
+        },
+        {
+          "id": "basic-usage",
+          "title": "Basic Usage",
+          "summary": "Perform simple calculations",
+          "content": "MathLib provides simple functions for basic arithmetic:\n\n- `add(a, b)` - Addition\n- `subtract(a, b)` - Subtraction\n- `multiply(a, b)` - Multiplication\n- `divide(a, b)` - Division\n\nFor more complex operations, use the `Calculator` class.",
+          "examples": [
+            {
+              "title": "Simple arithmetic",
+              "language": "typescript",
+              "code": "const sum = add(10, 5);      // 15\nconst diff = subtract(10, 5); // 5",
+              "standalone": false
+            }
+          ]
+        }
+      ],
+      "see": [
+        {
+          "type": "member",
+          "target": "Calculator",
+          "label": "Calculator class for chained operations"
+        }
+      ]
+    }
+  ],
+  "schemas": {
+    "NumberPair": {
+      "type": "array",
+      "description": "A tuple of exactly two numbers",
+      "items": {
+        "type": "number"
+      },
+      "minLength": 2,
+      "maxLength": 2
+    },
+    "CalculatorOptions": {
+      "type": "object",
+      "description": "Configuration options for the Calculator",
+      "properties": {
+        "initialValue": {
+          "type": "number",
+          "description": "Starting value",
+          "default": 0
+        },
+        "precision": {
+          "type": "integer",
+          "description": "Decimal places to round to",
+          "minimum": 0,
+          "maximum": 20
+        }
+      }
+    },
+    "VectorLike": {
+      "type": "object",
+      "description": "Object that can be converted to a Vector",
+      "properties": {
+        "x": {
+          "type": "number"
+        },
+        "y": {
+          "type": "number"
+        }
+      },
+      "required": ["x", "y"]
+    }
+  }
+}

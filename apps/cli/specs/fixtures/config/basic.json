@@ -1,0 +1,10 @@
+{
+  "$schema": "https://lrn.dev/schema/config.json",
+  "registry": "https://registry.lrn.dev",
+  "cache": "~/.lrn",
+  "defaultFormat": "text",
+  "packages": {
+    "mathlib": "^2.0.0",
+    "acme-api": "2024.1.0"
+  }
+}

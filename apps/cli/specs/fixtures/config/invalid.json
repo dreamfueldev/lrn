@@ -1,0 +1,9 @@
+{
+  "packages": {
+    "bad-package": {
+      "this-is-not-valid": true
+    }
+  },
+  "unknownField": "should be ignored",
+  "defaultFormat": "not-a-valid-format"
+}

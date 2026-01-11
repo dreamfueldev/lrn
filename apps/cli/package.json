@@ -11,7 +11,9 @@
     "dev": "tsup --watch",
     "typecheck": "tsc --noEmit",
     "lint": "eslint src/",
-    "test": "vitest run"
+    "test": "vitest run",
+    "specs": "vitest run --reporter=json 2>/dev/null | node scripts/format-specs.js",
+    "specs:json": "vitest run --reporter=json"
   },
   "dependencies": {
     "@lrn/core": "workspace:*",

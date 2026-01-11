@@ -1,0 +1,765 @@
+{
+  "name": "acme-api",
+  "version": "2024.1.0",
+  "summary": "ACME Corporation REST API",
+  "description": "The ACME API provides programmatic access to users, products, and orders. All endpoints require authentication via API key.",
+  "source": {
+    "type": "openapi",
+    "url": "https://api.acme.example/openapi.json",
+    "baseUrl": "https://api.acme.example/v1",
+    "generatedAt": "2025-01-15T12:00:00Z"
+  },
+  "tags": ["rest", "api"],
+  "links": {
+    "homepage": "https://acme.example",
+    "documentation": "https://docs.acme.example"
+  },
+  "members": [
+    {
+      "name": "users",
+      "kind": "namespace",
+      "summary": "User management endpoints",
+      "description": "Create, read, update, and delete users. All user endpoints require authentication.",
+      "tags": ["users"],
+      "children": [
+        {
+          "name": "list",
+          "kind": "method",
+          "summary": "List all users",
+          "description": "Returns a paginated list of all users in the organization.",
+          "signature": "() => Promise<UserList>",
+          "http": {
+            "method": "GET",
+            "path": "/users",
+            "query": [
+              {
+                "name": "page",
+                "type": "integer",
+                "description": "Page number (1-indexed)",
+                "default": 1
+              },
+              {
+                "name": "limit",
+                "type": "integer",
+                "description": "Items per page (max 100)",
+                "default": 20
+              },
+              {
+                "name": "status",
+                "type": "string",
+                "description": "Filter by status: active, inactive, pending"
+              }
+            ],
+            "responses": {
+              "200": {
+                "description": "Successful response",
+                "schema": "UserList"
+              },
+              "401": {
+                "description": "Unauthorized - invalid or missing API key"
+              }
+            }
+          },
+          "returns": {
+            "type": "UserList",
+            "schema": "UserList"
+          },
+          "tags": ["users", "list"],
+          "examples": [
+            {
+              "title": "List active users",
+              "language": "bash",
+              "code": "curl -H \"Authorization: Bearer $API_KEY\" \\\n  \"https://api.acme.example/v1/users?status=active\"",
+              "standalone": true
+            }
+          ]
+        },
+        {
+          "name": "create",
+          "kind": "method",
+          "summary": "Create a new user",
+          "description": "Creates a new user in the system. The email must be unique.",
+          "signature": "(data: CreateUserRequest) => Promise<User>",
+          "http": {
+            "method": "POST",
+            "path": "/users",
+            "body": "CreateUserRequest",
+            "responses": {
+              "201": {
+                "description": "User created successfully",
+                "schema": "User"
+              },
+              "400": {
+                "description": "Invalid request body"
+              },
+              "409": {
+                "description": "Email already exists"
+              }
+            }
+          },
+          "parameters": [
+            {
+              "name": "email",
+              "type": "string",
+              "description": "User's email address",
+              "required": true,
+              "in": "body"
+            },
+            {
+              "name": "name",
+              "type": "string",
+              "description": "User's full name",
+              "required": true,
+              "in": "body"
+            },
+            {
+              "name": "role",
+              "type": "string",
+              "description": "User role: admin, member, viewer",
+              "default": "member",
+              "in": "body"
+            }
+          ],
+          "returns": {
+            "type": "User",
+            "schema": "User"
+          },
+          "tags": ["users", "create"]
+        },
+        {
+          "name": "get",
+          "kind": "method",
+          "summary": "Get a user by ID",
+          "description": "Retrieves a single user by their unique identifier.",
+          "signature": "(id: string) => Promise<User>",
+          "http": {
+            "method": "GET",
+            "path": "/users/{id}",
+            "responses": {
+              "200": {
+                "description": "User found",
+                "schema": "User"
+              },
+              "404": {
+                "description": "User not found"
+              }
+            }
+          },
+          "parameters": [
+            {
+              "name": "id",
+              "type": "string",
+              "description": "User ID",
+              "required": true,
+              "in": "path"
+            }
+          ],
+          "returns": {
+            "type": "User",
+            "schema": "User"
+          },
+          "tags": ["users"]
+        },
+        {
+          "name": "update",
+          "kind": "method",
+          "summary": "Update a user",
+          "signature": "(id: string, data: UpdateUserRequest) => Promise<User>",
+          "http": {
+            "method": "PUT",
+            "path": "/users/{id}",
+            "body": "UpdateUserRequest",
+            "responses": {
+              "200": {
+                "description": "User updated",
+                "schema": "User"
+              }
+            }
+          },
+          "tags": ["users"]
+        },
+        {
+          "name": "delete",
+          "kind": "method",
+          "summary": "Delete a user",
+          "signature": "(id: string) => Promise<void>",
+          "http": {
+            "method": "DELETE",
+            "path": "/users/{id}",
+            "responses": {
+              "204": {
+                "description": "User deleted"
+              }
+            }
+          },
+          "tags": ["users"]
+        }
+      ]
+    },
+    {
+      "name": "products",
+      "kind": "namespace",
+      "summary": "Product catalog endpoints",
+      "description": "Manage the product catalog including inventory and pricing.",
+      "tags": ["products", "catalog"],
+      "children": [
+        {
+          "name": "list",
+          "kind": "method",
+          "summary": "List all products",
+          "http": {
+            "method": "GET",
+            "path": "/products",
+            "query": [
+              {
+                "name": "category",
+                "type": "string",
+                "description": "Filter by category"
+              },
+              {
+                "name": "inStock",
+                "type": "boolean",
+                "description": "Only show in-stock items"
+              }
+            ],
+            "responses": {
+              "200": {
+                "description": "Product list",
+                "schema": "ProductList"
+              }
+            }
+          },
+          "tags": ["products", "list"]
+        },
+        {
+          "name": "get",
+          "kind": "method",
+          "summary": "Get a product by ID",
+          "http": {
+            "method": "GET",
+            "path": "/products/{id}",
+            "responses": {
+              "200": {
+                "description": "Product details",
+                "schema": "Product"
+              }
+            }
+          },
+          "tags": ["products"]
+        },
+        {
+          "name": "create",
+          "kind": "method",
+          "summary": "Create a new product",
+          "http": {
+            "method": "POST",
+            "path": "/products",
+            "body": "CreateProductRequest",
+            "responses": {
+              "201": {
+                "description": "Product created",
+                "schema": "Product"
+              }
+            },
+            "scopes": ["products:write"]
+          },
+          "tags": ["products", "create"]
+        }
+      ]
+    },
+    {
+      "name": "orders",
+      "kind": "namespace",
+      "summary": "Order management endpoints",
+      "description": "Create and manage customer orders.",
+      "tags": ["orders", "billing"],
+      "children": [
+        {
+          "name": "list",
+          "kind": "method",
+          "summary": "List all orders",
+          "http": {
+            "method": "GET",
+            "path": "/orders",
+            "responses": {
+              "200": {
+                "description": "Order list",
+                "schema": "OrderList"
+              }
+            }
+          },
+          "tags": ["orders", "list"]
+        },
+        {
+          "name": "create",
+          "kind": "method",
+          "summary": "Create a new order",
+          "http": {
+            "method": "POST",
+            "path": "/orders",
+            "body": "CreateOrderRequest",
+            "responses": {
+              "201": {
+                "description": "Order created",
+                "schema": "Order"
+              }
+            }
+          },
+          "tags": ["orders", "create"],
+          "see": [
+            {
+              "type": "guide",
+              "target": "webhooks",
+              "label": "Receive order notifications via webhooks"
+            }
+          ]
+        },
+        {
+          "name": "get",
+          "kind": "method",
+          "summary": "Get an order by ID",
+          "http": {
+            "method": "GET",
+            "path": "/orders/{id}",
+            "responses": {
+              "200": {
+                "description": "Order details",
+                "schema": "Order"
+              }
+            }
+          },
+          "tags": ["orders"]
+        },
+        {
+          "name": "items",
+          "kind": "namespace",
+          "summary": "Order line items",
+          "description": "Manage individual items within an order.",
+          "tags": ["orders"],
+          "children": [
+            {
+              "name": "add",
+              "kind": "method",
+              "summary": "Add item to order",
+              "description": "Adds a product to an existing order. The order must be in 'pending' status.",
+              "http": {
+                "method": "POST",
+                "path": "/orders/{orderId}/items",
+                "body": "AddItemRequest",
+                "responses": {
+                  "201": {
+                    "description": "Item added",
+                    "schema": "OrderItem"
+                  }
+                }
+              },
+              "parameters": [
+                {
+                  "name": "orderId",
+                  "type": "string",
+                  "description": "Order ID",
+                  "required": true,
+                  "in": "path"
+                },
+                {
+                  "name": "productId",
+                  "type": "string",
+                  "description": "Product to add",
+                  "required": true,
+                  "in": "body"
+                },
+                {
+                  "name": "quantity",
+                  "type": "integer",
+                  "description": "Quantity to add",
+                  "required": true,
+                  "in": "body"
+                }
+              ],
+              "tags": ["orders"]
+            },
+            {
+              "name": "remove",
+              "kind": "method",
+              "summary": "Remove item from order",
+              "http": {
+                "method": "DELETE",
+                "path": "/orders/{orderId}/items/{itemId}",
+                "responses": {
+                  "204": {
+                    "description": "Item removed"
+                  }
+                }
+              },
+              "tags": ["orders"]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "authenticate",
+      "kind": "function",
+      "summary": "Authenticate API requests",
+      "description": "All API requests must include an API key in the Authorization header.",
+      "signature": "(apiKey: string) => AuthContext",
+      "tags": ["auth"],
+      "see": [
+        {
+          "type": "guide",
+          "target": "authentication"
+        }
+      ]
+    }
+  ],
+  "guides": [
+    {
+      "slug": "quickstart",
+      "title": "ACME API Quickstart",
+      "summary": "Get started with the ACME API in 5 minutes",
+      "intro": "This guide walks you through making your first API call to the ACME API.",
+      "kind": "quickstart",
+      "level": "beginner",
+      "tags": ["getting-started"],
+      "sections": [
+        {
+          "id": "get-api-key",
+          "title": "Get Your API Key",
+          "summary": "Obtain an API key from the dashboard",
+          "content": "To use the ACME API, you need an API key.\n\n1. Log in to your [ACME Dashboard](https://dashboard.acme.example)\n2. Navigate to Settings > API Keys\n3. Click \"Create New Key\"\n4. Copy the key - you won't see it again!"
+        },
+        {
+          "id": "first-request",
+          "title": "Make Your First Request",
+          "summary": "Call the API using curl",
+          "content": "With your API key, you can now make requests:",
+          "examples": [
+            {
+              "title": "List users",
+              "language": "bash",
+              "code": "curl -H \"Authorization: Bearer YOUR_API_KEY\" \\\n  https://api.acme.example/v1/users",
+              "standalone": true
+            }
+          ]
+        }
+      ],
+      "see": [
+        {
+          "type": "guide",
+          "target": "authentication",
+          "label": "Learn more about authentication"
+        }
+      ]
+    },
+    {
+      "slug": "authentication",
+      "title": "Authentication",
+      "summary": "How to authenticate with the ACME API",
+      "intro": "All ACME API requests require authentication using an API key.",
+      "kind": "concept",
+      "level": "beginner",
+      "tags": ["auth", "security"],
+      "sections": [
+        {
+          "id": "api-keys",
+          "title": "API Keys",
+          "summary": "Understanding API key authentication",
+          "content": "API keys are long-lived credentials that identify your application.\n\n**Security best practices:**\n- Never commit API keys to source control\n- Use environment variables to store keys\n- Rotate keys periodically\n- Use separate keys for development and production"
+        },
+        {
+          "id": "headers",
+          "title": "Authorization Header",
+          "summary": "How to send your API key",
+          "content": "Include your API key in the `Authorization` header using the Bearer scheme:",
+          "examples": [
+            {
+              "language": "http",
+              "code": "Authorization: Bearer sk_live_abc123..."
+            }
+          ]
+        },
+        {
+          "id": "scopes",
+          "title": "Permission Scopes",
+          "summary": "Control what your API key can access",
+          "content": "API keys can be restricted to specific scopes:\n\n- `read` - Read-only access\n- `write` - Create and update resources\n- `delete` - Delete resources\n- `admin` - Full administrative access"
+        }
+      ],
+      "see": [
+        {
+          "type": "member",
+          "target": "authenticate"
+        }
+      ]
+    },
+    {
+      "slug": "webhooks",
+      "title": "Webhooks",
+      "summary": "Receive real-time notifications",
+      "intro": "Webhooks allow you to receive HTTP callbacks when events occur in ACME.",
+      "kind": "howto",
+      "level": "intermediate",
+      "tags": ["webhooks", "events"],
+      "sections": [
+        {
+          "id": "setup",
+          "title": "Setting Up Webhooks",
+          "summary": "Configure your webhook endpoint",
+          "content": "To receive webhooks:\n\n1. Create an endpoint on your server that accepts POST requests\n2. Register the endpoint URL in the ACME dashboard\n3. Select which events you want to receive",
+          "sections": [
+            {
+              "id": "endpoint-requirements",
+              "title": "Endpoint Requirements",
+              "summary": "What your endpoint needs",
+              "content": "Your webhook endpoint must:\n- Accept POST requests\n- Return 200 status within 30 seconds\n- Be publicly accessible (HTTPS required in production)"
+            }
+          ]
+        },
+        {
+          "id": "verification",
+          "title": "Verifying Webhooks",
+          "summary": "Ensure webhooks are from ACME",
+          "content": "All webhooks include a signature in the `X-ACME-Signature` header. Verify this signature to ensure the webhook is authentic.",
+          "examples": [
+            {
+              "title": "Verify signature (Node.js)",
+              "language": "javascript",
+              "code": "const crypto = require('crypto');\n\nfunction verifyWebhook(payload, signature, secret) {\n  const expected = crypto\n    .createHmac('sha256', secret)\n    .update(payload)\n    .digest('hex');\n  return signature === expected;\n}",
+              "standalone": true
+            }
+          ]
+        },
+        {
+          "id": "events",
+          "title": "Event Types",
+          "summary": "Available webhook events",
+          "content": "ACME sends the following event types:\n\n- `user.created` - New user registered\n- `order.created` - New order placed\n- `order.completed` - Order fulfilled\n- `order.cancelled` - Order cancelled"
+        }
+      ]
+    }
+  ],
+  "schemas": {
+    "User": {
+      "type": "object",
+      "description": "A user in the system",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier"
+        },
+        "email": {
+          "type": "string",
+          "format": "email",
+          "description": "User's email address"
+        },
+        "name": {
+          "type": "string",
+          "description": "Full name"
+        },
+        "role": {
+          "type": "string",
+          "enum": ["admin", "member", "viewer"],
+          "description": "User's role"
+        },
+        "status": {
+          "type": "string",
+          "enum": ["active", "inactive", "pending"]
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["id", "email", "name"]
+    },
+    "UserList": {
+      "type": "object",
+      "properties": {
+        "data": {
+          "type": "array",
+          "items": {
+            "$ref": "User"
+          }
+        },
+        "pagination": {
+          "$ref": "Pagination"
+        }
+      }
+    },
+    "CreateUserRequest": {
+      "type": "object",
+      "properties": {
+        "email": {
+          "type": "string",
+          "format": "email"
+        },
+        "name": {
+          "type": "string"
+        },
+        "role": {
+          "type": "string",
+          "default": "member"
+        }
+      },
+      "required": ["email", "name"]
+    },
+    "UpdateUserRequest": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "role": {
+          "type": "string"
+        }
+      }
+    },
+    "Product": {
+      "type": "object",
+      "description": "A product in the catalog",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "price": {
+          "type": "integer",
+          "description": "Price in cents"
+        },
+        "category": {
+          "type": "string"
+        },
+        "inStock": {
+          "type": "boolean"
+        }
+      },
+      "required": ["id", "name", "price"]
+    },
+    "ProductList": {
+      "type": "object",
+      "properties": {
+        "data": {
+          "type": "array",
+          "items": {
+            "$ref": "Product"
+          }
+        },
+        "pagination": {
+          "$ref": "Pagination"
+        }
+      }
+    },
+    "Order": {
+      "type": "object",
+      "description": "A customer order",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "userId": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string",
+          "enum": ["pending", "processing", "shipped", "completed", "cancelled"]
+        },
+        "items": {
+          "type": "array",
+          "items": {
+            "$ref": "OrderItem"
+          }
+        },
+        "total": {
+          "type": "integer",
+          "description": "Total in cents"
+        },
+        "shippingAddress": {
+          "$ref": "Address"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["id", "userId", "status", "items", "total"]
+    },
+    "OrderList": {
+      "type": "object",
+      "properties": {
+        "data": {
+          "type": "array",
+          "items": {
+            "$ref": "Order"
+          }
+        }
+      }
+    },
+    "OrderItem": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "productId": {
+          "type": "string"
+        },
+        "quantity": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "unitPrice": {
+          "type": "integer"
+        }
+      },
+      "required": ["productId", "quantity"]
+    },
+    "Address": {
+      "type": "object",
+      "description": "A postal address",
+      "properties": {
+        "line1": {
+          "type": "string"
+        },
+        "line2": {
+          "type": "string"
+        },
+        "city": {
+          "type": "string"
+        },
+        "state": {
+          "type": "string"
+        },
+        "postalCode": {
+          "type": "string"
+        },
+        "country": {
+          "type": "string"
+        }
+      },
+      "required": ["line1", "city", "country"]
+    },
+    "Pagination": {
+      "type": "object",
+      "description": "Pagination metadata",
+      "properties": {
+        "page": {
+          "type": "integer"
+        },
+        "limit": {
+          "type": "integer"
+        },
+        "total": {
+          "type": "integer"
+        },
+        "hasMore": {
+          "type": "boolean"
+        }
+      }
+    }
+  }
+}

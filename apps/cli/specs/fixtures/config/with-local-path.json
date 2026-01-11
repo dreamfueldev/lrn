@@ -1,0 +1,10 @@
+{
+  "packages": {
+    "mathlib": {
+      "path": "./specs/fixtures/packages/mathlib.lrn.json"
+    },
+    "acme-api": {
+      "path": "./specs/fixtures/packages/acme-api.lrn.json"
+    }
+  }
+}
