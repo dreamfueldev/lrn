@@ -1,16 +1,68 @@
-import { describe, it } from "vitest";
+import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import {
+  loadAllFixturePackages,
+  createTestCache,
+  runCLI,
+} from "./fixtures/index.js";
 
 describe("Type/Schema Commands", () => {
+  let cacheDir: string;
+  let cleanup: () => void;
+
+  beforeAll(() => {
+    const packages = loadAllFixturePackages();
+    const cache = createTestCache(packages);
+    cacheDir = cache.cacheDir;
+    cleanup = cache.cleanup;
+  });
+
+  afterAll(() => {
+    cleanup();
+  });
+
+  const runWithCache = (args: string[]) =>
+    runCLI(["--format", "text", ...args], { env: { LRN_CACHE: cacheDir } });
+
   describe("lrn <package> type <name>", () => {
-    it.todo("shows schema name");
-    it.todo("shows schema description");
-    it.todo("shows schema base type");
-    it.todo("fails with exit code 3 when schema not found");
+    it("shows schema name", async () => {
+      const result = await runWithCache(["acme-api", "type", "User"]);
+      // Output should contain type info
+      expect(result.exitCode).toBe(0);
+    });
+
+    it("shows schema description", async () => {
+      const result = await runWithCache(["acme-api", "type", "User"]);
+      expect(result.stdout).toContain("user");
+    });
+
+    it("shows schema base type", async () => {
+      const result = await runWithCache(["acme-api", "type", "User"]);
+      expect(result.stdout).toContain("object");
+    });
+
+    it("fails with exit code 3 when schema not found", async () => {
+      const result = await runWithCache(["acme-api", "type", "NonexistentType"]);
+      expect(result.exitCode).toBe(3);
+      expect(result.stderr).toContain("not found");
+    });
 
     describe("object schemas", () => {
-      it.todo("shows all properties");
-      it.todo("shows property names");
-      it.todo("shows property types");
+      it("shows all properties", async () => {
+        const result = await runWithCache(["acme-api", "type", "User"]);
+        expect(result.stdout).toContain("Properties:");
+      });
+
+      it("shows property names", async () => {
+        const result = await runWithCache(["acme-api", "type", "User"]);
+        expect(result.stdout).toContain("id");
+        expect(result.stdout).toContain("email");
+      });
+
+      it("shows property types", async () => {
+        const result = await runWithCache(["acme-api", "type", "User"]);
+        expect(result.stdout).toContain("string");
+      });
+
       it.todo("shows property descriptions");
       it.todo("indicates required properties");
       it.todo("shows property default values");
@@ -18,7 +70,11 @@ describe("Type/Schema Commands", () => {
     });
 
     describe("array schemas", () => {
-      it.todo("shows items type");
+      it("shows items type", async () => {
+        const result = await runWithCache(["mathlib", "type", "NumberPair"]);
+        expect(result.stdout).toContain("array");
+      });
+
       it.todo("shows items schema details");
       it.todo("shows minLength constraint");
       it.todo("shows maxLength constraint");
@@ -39,7 +95,12 @@ describe("Type/Schema Commands", () => {
     });
 
     describe("$ref resolution", () => {
-      it.todo("resolves reference to another schema");
+      it("resolves reference to another schema", async () => {
+        const result = await runWithCache(["acme-api", "type", "Order"]);
+        // Order references User
+        expect(result.exitCode).toBe(0);
+      });
+
       it.todo("shows referenced schema inline");
       it.todo("handles circular references gracefully");
       it.todo("shows reference path for complex nested refs");

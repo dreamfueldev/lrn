@@ -7,7 +7,7 @@
 import { readFileSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
-import type { Package, LrnConfig } from "@lrn/schema";
+import type { Package, LrnConfig } from "../../src/schema/index.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -133,8 +133,38 @@ export interface CLIResult {
   exitCode: number;
 }
 
-export async function runCLI(args: string[]): Promise<CLIResult> {
-  // This will be implemented when we have the CLI entry point
-  // For now, return a stub
-  throw new Error("runCLI not yet implemented");
+export async function runCLI(
+  args: string[],
+  options: { env?: Record<string, string>; cwd?: string } = {}
+): Promise<CLIResult> {
+  const { spawn } = require("node:child_process");
+  const path = require("node:path");
+
+  return new Promise((resolve) => {
+    const cliPath = path.join(__dirname, "../../dist/index.js");
+
+    const child = spawn("node", [cliPath, ...args], {
+      env: { ...process.env, ...options.env },
+      cwd: options.cwd || process.cwd(),
+    });
+
+    let stdout = "";
+    let stderr = "";
+
+    child.stdout.on("data", (data: Buffer) => {
+      stdout += data.toString();
+    });
+
+    child.stderr.on("data", (data: Buffer) => {
+      stderr += data.toString();
+    });
+
+    child.on("close", (code: number | null) => {
+      resolve({
+        stdout: stdout.trim(),
+        stderr: stderr.trim(),
+        exitCode: code ?? 0,
+      });
+    });
+  });
 }

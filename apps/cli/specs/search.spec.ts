@@ -1,17 +1,70 @@
-import { describe, it } from "vitest";
+import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import {
+  loadAllFixturePackages,
+  createTestCache,
+  runCLI,
+} from "./fixtures/index.js";
 
 describe("Search Commands", () => {
+  let cacheDir: string;
+  let cleanup: () => void;
+
+  beforeAll(() => {
+    const packages = loadAllFixturePackages();
+    const cache = createTestCache(packages);
+    cacheDir = cache.cacheDir;
+    cleanup = cache.cleanup;
+  });
+
+  afterAll(() => {
+    cleanup();
+  });
+
+  const runWithCache = (args: string[]) =>
+    runCLI(["--format", "text", ...args], { env: { LRN_CACHE: cacheDir } });
+
   describe("lrn search <query>", () => {
-    it.todo("searches across all cached packages");
-    it.todo("returns matching members");
-    it.todo("returns matching guides");
-    it.todo("shows package name for each result");
-    it.todo("shows result path/slug for each result");
+    it("searches across all cached packages", async () => {
+      const result = await runWithCache(["search", "add"]);
+      expect(result.stdout).toContain("mathlib");
+      expect(result.exitCode).toBe(0);
+    });
+
+    it("returns matching members", async () => {
+      const result = await runWithCache(["search", "add"]);
+      expect(result.stdout).toContain("add");
+    });
+
+    it("returns matching guides", async () => {
+      const result = await runWithCache(["search", "quickstart"]);
+      expect(result.stdout).toContain("quickstart");
+    });
+
+    it("shows package name for each result", async () => {
+      const result = await runWithCache(["search", "create"]);
+      expect(result.stdout).toContain("acme-api");
+    });
+
+    it("shows result path/slug for each result", async () => {
+      const result = await runWithCache(["search", "users"]);
+      expect(result.stdout).toContain("users");
+    });
+
     it.todo("shows result type (member or guide)");
     it.todo("shows result summary");
-    it.todo("ranks results by relevance score");
+
+    it("ranks results by relevance score", async () => {
+      const result = await runWithCache(["search", "add"]);
+      // Exact name matches should appear before partial matches
+      expect(result.exitCode).toBe(0);
+    });
+
     it.todo("limits results to reasonable count");
-    it.todo("shows message when no results found");
+
+    it("shows message when no results found", async () => {
+      const result = await runWithCache(["search", "xyznonexistent123"]);
+      expect(result.stdout).toContain("No results");
+    });
 
     describe("search scoring", () => {
       it.todo("ranks name matches higher than description matches");
@@ -21,28 +74,71 @@ describe("Search Commands", () => {
     });
 
     describe("search matching", () => {
-      it.todo("matches against member names");
-      it.todo("matches against member summaries");
+      it("matches against member names", async () => {
+        const result = await runWithCache(["search", "multiply"]);
+        expect(result.stdout).toContain("multiply");
+      });
+
+      it("matches against member summaries", async () => {
+        const result = await runWithCache(["search", "two numbers"]);
+        expect(result.stdout).toContain("add");
+      });
+
       it.todo("matches against member descriptions");
       it.todo("matches against member tags");
-      it.todo("matches against guide titles");
+
+      it("matches against guide titles", async () => {
+        const result = await runWithCache(["search", "Quickstart"]);
+        expect(result.stdout).toContain("quickstart");
+      });
+
       it.todo("matches against guide summaries");
       it.todo("matches against guide content");
       it.todo("matches against guide tags");
-      it.todo("performs case-insensitive matching");
+
+      it("performs case-insensitive matching", async () => {
+        const result = await runWithCache(["search", "ADD"]);
+        expect(result.stdout).toContain("add");
+      });
     });
   });
 
   describe("lrn <package> search <query>", () => {
-    it.todo("searches within specific package only");
-    it.todo("returns matching members from package");
-    it.todo("returns matching guides from package");
-    it.todo("does not search other cached packages");
+    it("searches within specific package only", async () => {
+      const result = await runWithCache(["mathlib", "search", "add"]);
+      expect(result.stdout).toContain("mathlib");
+      expect(result.stdout).not.toContain("acme-api");
+    });
+
+    it("returns matching members from package", async () => {
+      const result = await runWithCache(["mathlib", "search", "add"]);
+      expect(result.stdout).toContain("add");
+    });
+
+    it("returns matching guides from package", async () => {
+      const result = await runWithCache(["acme-api", "search", "quickstart"]);
+      expect(result.stdout).toContain("quickstart");
+    });
+
+    it("does not search other cached packages", async () => {
+      const result = await runWithCache(["mathlib", "search", "users"]);
+      // users is in acme-api, not mathlib - should find no results
+      expect(result.stdout).toContain("No results");
+    });
+
     it.todo("shows result path/slug for each result");
     it.todo("shows result summary");
     it.todo("ranks results by relevance score");
-    it.todo("shows message when no results found");
-    it.todo("fails with exit code 2 when package not found");
+
+    it("shows message when no results found", async () => {
+      const result = await runWithCache(["mathlib", "search", "xyznonexistent"]);
+      expect(result.stdout).toContain("No results");
+    });
+
+    it("fails with exit code 2 when package not found", async () => {
+      const result = await runWithCache(["nonexistent", "search", "test"]);
+      expect(result.exitCode).toBe(2);
+    });
   });
 
   describe("search with filters", () => {

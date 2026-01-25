@@ -96,8 +96,7 @@ lrn list [package]             # List packages or members
 lrn show <package.member>      # Show member details
 lrn search <query>             # Search across packages
 lrn tags <package>             # List available tags
-lrn example <package.member>   # Show usage examples (future/premium)
-lrn explain <package.member>   # Natural language explanation (future/premium)
+lrn example <package.member>   # Show usage examples
 ```
 
 Key flags: `--format (text|json|markdown)`, `--summary`, `--signature`, `--tag`, `--type`

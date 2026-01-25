@@ -5,6 +5,8 @@
  */
 
 import type { ParsedArgs } from "../args.js";
+import { loadConfig, type ResolvedConfig } from "../config.js";
+import { CLIError, ExitCode } from "../errors.js";
 import {
   printHelp,
   printVersion,
@@ -13,6 +15,16 @@ import {
   printUnknownOption,
 } from "./help.js";
 import { getUnknownFlags } from "../args.js";
+import { runListPackages } from "./list-packages.js";
+import { runPackage } from "./package.js";
+import { runList } from "./list.js";
+import { runMember } from "./member.js";
+import { runGuides } from "./guides.js";
+import { runGuide } from "./guide.js";
+import { runTypes } from "./types.js";
+import { runType } from "./type.js";
+import { runTags } from "./tags.js";
+import { runSearch } from "./search.js";
 
 export interface CommandResult {
   exitCode: number;
@@ -45,125 +57,88 @@ export async function runCommand(args: ParsedArgs): Promise<CommandResult> {
     return { exitCode: 0 };
   }
 
-  // Route to command handler
-  switch (args.command) {
-    case undefined:
-      // No command - either list packages or show package
-      if (args.package) {
-        return showPackage(args);
-      }
-      return listPackages(args);
-
-    case "show":
-      return showMember(args);
-
-    case "list":
-      return listMembers(args);
-
-    case "guides":
-      return listGuides(args);
-
-    case "types":
-      return listTypes(args);
-
-    case "tags":
-      return listTags(args);
-
-    case "guide":
-      return showGuide(args);
-
-    case "type":
-      return showType(args);
-
-    case "search":
-      return search(args);
-
-    case "sync":
-      return sync(args);
-
-    case "add":
-      return add(args);
-
-    case "remove":
-      return remove(args);
-
-    case "versions":
-      return versions(args);
-
-    default:
-      printUnknownCommand(args.command);
-      return { exitCode: 1 };
+  // Load config for commands that need it
+  let config: ResolvedConfig;
+  try {
+    config = loadConfig(args);
+  } catch (err) {
+    if (err instanceof CLIError) {
+      console.error(err.message);
+      return { exitCode: err.exitCode };
+    }
+    throw err;
   }
-}
 
-// Stub implementations - will be filled in as we implement each tier
+  // Route to command handler
+  try {
+    switch (args.command) {
+      case undefined:
+        // No command - either list packages or show package
+        if (args.package) {
+          runPackage(args, config);
+        } else {
+          runListPackages(args, config);
+        }
+        return { exitCode: 0 };
 
-async function listPackages(_args: ParsedArgs): Promise<CommandResult> {
-  console.log("lrn - not yet implemented: list packages");
-  return { exitCode: 0 };
-}
+      case "list":
+        runList(args, config);
+        return { exitCode: 0 };
 
-async function showPackage(_args: ParsedArgs): Promise<CommandResult> {
-  console.log("lrn <package> - not yet implemented");
-  return { exitCode: 0 };
-}
+      case "guides":
+        runGuides(args, config);
+        return { exitCode: 0 };
 
-async function showMember(_args: ParsedArgs): Promise<CommandResult> {
-  console.log("lrn <package> <member> - not yet implemented");
-  return { exitCode: 0 };
-}
+      case "types":
+        runTypes(args, config);
+        return { exitCode: 0 };
 
-async function listMembers(_args: ParsedArgs): Promise<CommandResult> {
-  console.log("lrn <package> list - not yet implemented");
-  return { exitCode: 0 };
-}
+      case "tags":
+        runTags(args, config);
+        return { exitCode: 0 };
 
-async function listGuides(_args: ParsedArgs): Promise<CommandResult> {
-  console.log("lrn <package> guides - not yet implemented");
-  return { exitCode: 0 };
-}
+      case "guide":
+        runGuide(args, config);
+        return { exitCode: 0 };
 
-async function listTypes(_args: ParsedArgs): Promise<CommandResult> {
-  console.log("lrn <package> types - not yet implemented");
-  return { exitCode: 0 };
-}
+      case "type":
+        runType(args, config);
+        return { exitCode: 0 };
 
-async function listTags(_args: ParsedArgs): Promise<CommandResult> {
-  console.log("lrn <package> tags - not yet implemented");
-  return { exitCode: 0 };
-}
+      case "search":
+        runSearch(args, config);
+        return { exitCode: 0 };
 
-async function showGuide(_args: ParsedArgs): Promise<CommandResult> {
-  console.log("lrn <package> guide <slug> - not yet implemented");
-  return { exitCode: 0 };
-}
+      case "sync":
+        console.log("lrn sync - not yet implemented (requires registry)");
+        return { exitCode: 0 };
 
-async function showType(_args: ParsedArgs): Promise<CommandResult> {
-  console.log("lrn <package> type <name> - not yet implemented");
-  return { exitCode: 0 };
-}
+      case "add":
+        console.log("lrn add - not yet implemented (requires registry)");
+        return { exitCode: 0 };
 
-async function search(_args: ParsedArgs): Promise<CommandResult> {
-  console.log("lrn search - not yet implemented");
-  return { exitCode: 0 };
-}
+      case "remove":
+        console.log("lrn remove - not yet implemented");
+        return { exitCode: 0 };
 
-async function sync(_args: ParsedArgs): Promise<CommandResult> {
-  console.log("lrn sync - not yet implemented (requires registry)");
-  return { exitCode: 0 };
-}
+      case "versions":
+        console.log("lrn versions - not yet implemented (requires registry)");
+        return { exitCode: 0 };
 
-async function add(_args: ParsedArgs): Promise<CommandResult> {
-  console.log("lrn add - not yet implemented (requires registry)");
-  return { exitCode: 0 };
-}
-
-async function remove(_args: ParsedArgs): Promise<CommandResult> {
-  console.log("lrn remove - not yet implemented");
-  return { exitCode: 0 };
-}
-
-async function versions(_args: ParsedArgs): Promise<CommandResult> {
-  console.log("lrn versions - not yet implemented (requires registry)");
-  return { exitCode: 0 };
+      default:
+        // Check if this might be a member path (contains dots or positional[0] exists)
+        if (args.package && args.positional.length > 0) {
+          runMember(args, config);
+          return { exitCode: 0 };
+        }
+        printUnknownCommand(args.command);
+        return { exitCode: 1 };
+    }
+  } catch (err) {
+    if (err instanceof CLIError) {
+      console.error(err.message);
+      return { exitCode: err.exitCode };
+    }
+    throw err;
+  }
 }

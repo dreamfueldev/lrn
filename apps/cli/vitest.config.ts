@@ -9,5 +9,12 @@ export default defineConfig({
     passWithNoTests: true,
     // Include skipped/todo tests in output
     outputFile: undefined,
+    // Limit concurrency to avoid issues with spawned processes
+    pool: "forks",
+    poolOptions: {
+      forks: {
+        singleFork: true,
+      },
+    },
   },
 });
