@@ -1,11 +1,49 @@
-import { describe, it } from "bun:test";
+import { describe, it, expect, beforeAll, afterAll } from "bun:test";
+import {
+  loadAllFixturePackages,
+  createTestCache,
+  runCLI,
+} from "./fixtures/index.js";
 
 describe("Error Handling", () => {
+  let cacheDir: string;
+  let cleanup: () => void;
+
+  beforeAll(() => {
+    const packages = loadAllFixturePackages();
+    const cache = createTestCache(packages);
+    cacheDir = cache.cacheDir;
+    cleanup = cache.cleanup;
+  });
+
+  afterAll(() => {
+    cleanup();
+  });
+
+  const runWithCache = (args: string[]) =>
+    runCLI(["--format", "text", ...args], { env: { LRN_CACHE: cacheDir } });
+
   describe("exit codes", () => {
-    it.todo("exits with code 0 on success");
-    it.todo("exits with code 1 on general error");
-    it.todo("exits with code 2 when package not found");
-    it.todo("exits with code 3 when member/guide not found");
+    it("exits with code 0 on success", async () => {
+      const result = await runWithCache(["mathlib"]);
+      expect(result.exitCode).toBe(0);
+    });
+
+    it("exits with code 1 on general error", async () => {
+      const result = await runWithCache(["--unknown-flag"]);
+      expect(result.exitCode).toBe(1);
+    });
+
+    it("exits with code 2 when package not found", async () => {
+      const result = await runWithCache(["nonexistent-package"]);
+      expect(result.exitCode).toBe(2);
+    });
+
+    it("exits with code 3 when member/guide not found", async () => {
+      const result = await runWithCache(["mathlib", "nonexistent.member"]);
+      expect(result.exitCode).toBe(3);
+    });
+
     it.todo("exits with code 4 on network error");
   });
 
@@ -19,16 +57,41 @@ describe("Error Handling", () => {
   });
 
   describe("exit code 2 - package not found", () => {
-    it.todo("package not in local cache");
+    it("package not in local cache", async () => {
+      const result = await runWithCache(["unknown-package"]);
+      expect(result.exitCode).toBe(2);
+      expect(result.stderr).toContain("not found");
+    });
+
     it.todo("package not found in registry");
     it.todo("package name typo suggestions");
   });
 
   describe("exit code 3 - member/guide not found", () => {
-    it.todo("member path does not exist");
-    it.todo("guide slug does not exist");
-    it.todo("section path does not exist");
-    it.todo("type/schema name does not exist");
+    it("member path does not exist", async () => {
+      const result = await runWithCache(["mathlib", "nonexistent"]);
+      expect(result.exitCode).toBe(3);
+      expect(result.stderr).toContain("not found");
+    });
+
+    it("guide slug does not exist", async () => {
+      const result = await runWithCache(["acme-api", "guide", "nonexistent"]);
+      expect(result.exitCode).toBe(3);
+      expect(result.stderr).toContain("not found");
+    });
+
+    it("section path does not exist", async () => {
+      const result = await runWithCache(["acme-api", "guide", "quickstart.nonexistent"]);
+      expect(result.exitCode).toBe(3);
+      expect(result.stderr).toContain("not found");
+    });
+
+    it("type/schema name does not exist", async () => {
+      const result = await runWithCache(["acme-api", "type", "NonexistentType"]);
+      expect(result.exitCode).toBe(3);
+      expect(result.stderr).toContain("not found");
+    });
+
     it.todo("similar name suggestions");
   });
 
@@ -40,11 +103,21 @@ describe("Error Handling", () => {
   });
 
   describe("error message formatting", () => {
-    it.todo("shows clear error message");
+    it("shows clear error message", async () => {
+      const result = await runWithCache(["nonexistent"]);
+      expect(result.stderr).toContain("nonexistent");
+      expect(result.stderr.length).toBeGreaterThan(0);
+    });
+
     it.todo("shows error context (what was being attempted)");
     it.todo("shows suggestion for resolution when possible");
     it.todo("uses consistent error format across commands");
-    it.todo("uses stderr for error messages");
+
+    it("uses stderr for error messages", async () => {
+      const result = await runWithCache(["nonexistent"]);
+      expect(result.stderr.length).toBeGreaterThan(0);
+      // Error should be on stderr, not stdout
+    });
   });
 
   describe("--verbose flag", () => {

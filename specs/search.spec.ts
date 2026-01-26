@@ -50,8 +50,15 @@ describe("Search Commands", () => {
       expect(result.stdout).toContain("users");
     });
 
-    it.todo("shows result type (member or guide)");
-    it.todo("shows result summary");
+    it("shows result type (member or guide)", async () => {
+      const result = await runWithCache(["search", "quickstart"]);
+      expect(result.stdout).toContain("(guide)");
+    });
+
+    it("shows result summary", async () => {
+      const result = await runWithCache(["search", "add"]);
+      expect(result.stdout).toContain("Add two numbers");
+    });
 
     it("ranks results by relevance score", async () => {
       const result = await runWithCache(["search", "add"]);
@@ -84,17 +91,36 @@ describe("Search Commands", () => {
         expect(result.stdout).toContain("add");
       });
 
-      it.todo("matches against member descriptions");
-      it.todo("matches against member tags");
+      it("matches against member descriptions", async () => {
+        const result = await runWithCache(["search", "paginated"]);
+        // users.list description contains "paginated"
+        expect(result.stdout).toContain("list");
+      });
+
+      it("matches against member tags", async () => {
+        const result = await runWithCache(["search", "arithmetic"]);
+        // arithmetic is a tag on add, subtract, etc.
+        expect(result.stdout).toContain("add");
+      });
 
       it("matches against guide titles", async () => {
         const result = await runWithCache(["search", "Quickstart"]);
         expect(result.stdout).toContain("quickstart");
       });
 
-      it.todo("matches against guide summaries");
+      it("matches against guide summaries", async () => {
+        const result = await runWithCache(["search", "5 minutes"]);
+        // quickstart summary contains "5 minutes"
+        expect(result.stdout).toContain("quickstart");
+      });
+
       it.todo("matches against guide content");
-      it.todo("matches against guide tags");
+
+      it("matches against guide tags", async () => {
+        const result = await runWithCache(["search", "getting-started"]);
+        // getting-started is a tag on quickstart guide
+        expect(result.stdout).toContain("quickstart");
+      });
 
       it("performs case-insensitive matching", async () => {
         const result = await runWithCache(["search", "ADD"]);
@@ -126,8 +152,16 @@ describe("Search Commands", () => {
       expect(result.stdout).toContain("No results");
     });
 
-    it.todo("shows result path/slug for each result");
-    it.todo("shows result summary");
+    it("shows result path/slug for each result", async () => {
+      const result = await runWithCache(["acme-api", "search", "users"]);
+      expect(result.stdout).toContain("users");
+    });
+
+    it("shows result summary", async () => {
+      const result = await runWithCache(["mathlib", "search", "add"]);
+      expect(result.stdout).toContain("Add two numbers");
+    });
+
     it.todo("ranks results by relevance score");
 
     it("shows message when no results found", async () => {

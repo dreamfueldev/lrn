@@ -1,13 +1,63 @@
-import { describe, it } from "bun:test";
+import { describe, it, expect, beforeAll, afterAll } from "bun:test";
+import {
+  loadAllFixturePackages,
+  createTestCache,
+  runCLI,
+} from "./fixtures/index.js";
 
 describe("Discovery Commands", () => {
+  let cacheDir: string;
+  let cleanup: () => void;
+
+  beforeAll(() => {
+    const packages = loadAllFixturePackages();
+    const cache = createTestCache(packages);
+    cacheDir = cache.cacheDir;
+    cleanup = cache.cleanup;
+  });
+
+  afterAll(() => {
+    cleanup();
+  });
+
+  const runWithCache = (args: string[]) =>
+    runCLI(["--format", "text", ...args], { env: { LRN_CACHE: cacheDir } });
+
   describe("lrn (no arguments)", () => {
-    it.todo("lists all cached packages");
-    it.todo("shows package name for each cached package");
-    it.todo("shows package version for each cached package");
-    it.todo("shows package summary for each cached package");
+    it("lists all cached packages", async () => {
+      const result = await runWithCache([]);
+      expect(result.stdout).toContain("mathlib");
+      expect(result.stdout).toContain("acme-api");
+      expect(result.exitCode).toBe(0);
+    });
+
+    it("shows package name for each cached package", async () => {
+      const result = await runWithCache([]);
+      expect(result.stdout).toContain("mathlib");
+      expect(result.stdout).toContain("acme-api");
+    });
+
+    it("shows package version for each cached package", async () => {
+      const result = await runWithCache([]);
+      expect(result.stdout).toContain("2.1.0");
+      expect(result.stdout).toContain("2024.1.0");
+    });
+
+    it("shows package summary for each cached package", async () => {
+      const result = await runWithCache([]);
+      expect(result.stdout).toContain("simple math utilities");
+      expect(result.stdout).toContain("REST API");
+    });
+
     it.todo("shows message when no packages are cached");
-    it.todo("sorts packages alphabetically by name");
+
+    it("sorts packages alphabetically by name", async () => {
+      const result = await runWithCache([]);
+      // acme-api should come before mathlib
+      const acmeIndex = result.stdout.indexOf("acme-api");
+      const mathlibIndex = result.stdout.indexOf("mathlib");
+      expect(acmeIndex).toBeLessThan(mathlibIndex);
+    });
   });
 
   describe("lrn sync", () => {

@@ -57,8 +57,17 @@ describe("Guide Commands", () => {
       expect(result.stdout).toContain("first-request");
     });
 
-    it.todo("shows guide tags");
-    it.todo("shows related content (see references)");
+    it("shows guide tags", async () => {
+      const result = await runWithCache(["acme-api", "guide", "quickstart"]);
+      expect(result.stdout).toContain("Tags:");
+      expect(result.stdout).toContain("getting-started");
+    });
+
+    it("shows related content (see references)", async () => {
+      const result = await runWithCache(["acme-api", "guide", "quickstart"]);
+      expect(result.stdout).toContain("See also:");
+      expect(result.stdout).toContain("authentication");
+    });
 
     it("does not show full section content (progressive disclosure)", async () => {
       const result = await runWithCache(["acme-api", "guide", "quickstart"]);
@@ -98,9 +107,24 @@ describe("Guide Commands", () => {
       expect(result.stdout).toContain("API key");
     });
 
-    it.todo("shows nested subsections");
-    it.todo("shows section examples inline");
-    it.todo("renders markdown content appropriately");
+    it("shows nested subsections", async () => {
+      const result = await runWithCache(["acme-api", "guide", "webhooks", "--full"]);
+      // webhooks has a nested "endpoint-requirements" section under "setup"
+      expect(result.stdout).toContain("Endpoint Requirements");
+    });
+
+    it("shows section examples inline", async () => {
+      const result = await runWithCache(["acme-api", "guide", "webhooks", "--full"]);
+      // Verification section has a code example
+      expect(result.stdout).toContain("```javascript");
+      expect(result.stdout).toContain("createHmac");
+    });
+
+    it("renders markdown content appropriately", async () => {
+      const result = await runWithCache(["acme-api", "guide", "webhooks", "--full"]);
+      // Should contain markdown formatting
+      expect(result.stdout).toContain("##");
+    });
   });
 
   describe("lrn <package> guide <slug>.<section>", () => {
@@ -135,18 +159,57 @@ describe("Guide Commands", () => {
     });
 
     describe("nested sections", () => {
-      it.todo("resolves single-level section path");
-      it.todo("resolves multi-level section path (e.g., setup.installation)");
+      it("resolves single-level section path", async () => {
+        const result = await runWithCache(["acme-api", "guide", "quickstart.get-api-key"]);
+        expect(result.stdout).toContain("Get Your API Key");
+        expect(result.exitCode).toBe(0);
+      });
+
+      it("resolves multi-level section path (e.g., setup.endpoint-requirements)", async () => {
+        // webhooks has setup > endpoint-requirements nested section
+        const result = await runWithCache(["acme-api", "guide", "webhooks.setup.endpoint-requirements"]);
+        expect(result.stdout).toContain("Endpoint Requirements");
+        expect(result.exitCode).toBe(0);
+      });
+
       it.todo("resolves deeply nested section path");
     });
   });
 
   describe("guide content rendering", () => {
-    it.todo("renders markdown headings");
-    it.todo("renders markdown code blocks with syntax highlighting hint");
-    it.todo("renders markdown lists");
-    it.todo("renders markdown links");
-    it.todo("renders markdown inline code");
-    it.todo("renders markdown bold and italic");
+    it("renders markdown headings", async () => {
+      const result = await runWithCache(["acme-api", "guide", "webhooks", "--full"]);
+      expect(result.stdout).toContain("## Setting Up Webhooks");
+    });
+
+    it("renders markdown code blocks with syntax highlighting hint", async () => {
+      const result = await runWithCache(["acme-api", "guide", "webhooks", "--full"]);
+      expect(result.stdout).toContain("```javascript");
+      expect(result.stdout).toContain("```");
+    });
+
+    it("renders markdown lists", async () => {
+      const result = await runWithCache(["acme-api", "guide", "webhooks", "--full"]);
+      // Event types section has a list
+      expect(result.stdout).toMatch(/^- /m);
+    });
+
+    it("renders markdown links", async () => {
+      const result = await runWithCache(["acme-api", "guide", "quickstart", "--full"]);
+      expect(result.stdout).toContain("[ACME Dashboard]");
+      expect(result.stdout).toContain("https://dashboard.acme.example");
+    });
+
+    it("renders markdown inline code", async () => {
+      const result = await runWithCache(["acme-api", "guide", "authentication", "--full"]);
+      // The authorization header section has inline code
+      expect(result.stdout).toContain("`Authorization`");
+    });
+
+    it("renders markdown bold and italic", async () => {
+      const result = await runWithCache(["acme-api", "guide", "quickstart", "--full"]);
+      // Contains bold formatting
+      expect(result.stdout).toContain("**List users:**");
+    });
   });
 });

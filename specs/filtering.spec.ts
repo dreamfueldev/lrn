@@ -58,7 +58,13 @@ describe("Filtering Options", () => {
       expect(result.exitCode).toBe(0);
     });
 
-    it.todo("filters members by kind: method");
+    it("filters members by kind: method", async () => {
+      const result = await runWithCache(["acme-api", "list", "--kind", "method"]);
+      expect(result.stdout).toContain("list [method]");
+      expect(result.stdout).toContain("create [method]");
+      // Should not contain other kinds
+      expect(result.stdout).not.toContain("[namespace]");
+    });
 
     it("filters members by kind: class", async () => {
       const result = await runWithCache(["mathlib", "list", "--kind", "class"]);
@@ -72,9 +78,23 @@ describe("Filtering Options", () => {
       expect(result.stdout).toContain("users");
     });
 
+    it("filters members by kind: type", async () => {
+      const result = await runWithCache(["mathlib", "list", "--kind", "type"]);
+      expect(result.stdout).toContain("NumberPair");
+      expect(result.stdout).toContain("CalculatorOptions");
+      expect(result.stdout).toContain("[type]");
+      // Should not contain other kinds
+      expect(result.stdout).not.toContain("[function]");
+    });
+
+    it("filters members by kind: property", async () => {
+      // Properties are nested in classes, need --deep to find them
+      const result = await runWithCache(["mathlib", "list", "--kind", "property", "--deep"]);
+      expect(result.stdout).toContain("value");
+      expect(result.stdout).toContain("[property]");
+    });
+
     it.todo("filters members by kind: constant");
-    it.todo("filters members by kind: type");
-    it.todo("filters members by kind: property");
     it.todo("returns error for invalid kind value");
 
     it("returns empty list when no items match kind", async () => {
@@ -93,12 +113,24 @@ describe("Filtering Options", () => {
     });
 
     it.todo("excludes deprecated members by default (without flag)");
-    it.todo("shows deprecation notice for deprecated items");
+
+    it("shows deprecation notice for deprecated items", async () => {
+      const result = await runWithCache(["mathlib", "list", "--deprecated"]);
+      expect(result.stdout).toContain("(deprecated)");
+    });
+
     it.todo("can filter to ONLY deprecated with --deprecated --kind");
   });
 
   describe("filter combinations", () => {
-    it.todo("combines --tag and --kind with AND logic");
+    it("combines --tag and --kind with AND logic", async () => {
+      const result = await runWithCache(["acme-api", "list", "--tag", "users", "--kind", "method"]);
+      expect(result.stdout).toContain("list [method]");
+      expect(result.stdout).toContain("create [method]");
+      // Should not contain namespaces
+      expect(result.stdout).not.toContain("[namespace]");
+    });
+
     it.todo("combines --tag and --deprecated appropriately");
     it.todo("combines --kind and --deprecated appropriately");
     it.todo("combines all three filters correctly");
@@ -110,7 +142,13 @@ describe("Filtering Options", () => {
       expect(result.exitCode).toBe(0);
     });
 
-    it.todo("filters apply to lrn <package> list --deep");
+    it("filters apply to lrn <package> list --deep", async () => {
+      const result = await runWithCache(["acme-api", "list", "--deep", "--tag", "users"]);
+      expect(result.stdout).toContain("users.create");
+      // Should only show user-tagged items
+      expect(result.exitCode).toBe(0);
+    });
+
     it.todo("filters apply to lrn <package> guides (tag only)");
     it.todo("filters apply to lrn search results");
     it.todo("filters apply to lrn <package> search results");

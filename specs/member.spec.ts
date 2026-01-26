@@ -72,7 +72,11 @@ describe("Member Commands", () => {
       expect(result.stdout).toContain("required");
     });
 
-    it.todo("shows member parameters with default values");
+    it("shows member parameters with default values", async () => {
+      const result = await runWithCache(["mathlib", "Calculator"]);
+      expect(result.stdout).toContain("initialValue");
+      expect(result.stdout).toContain("= 0");
+    });
 
     it("shows member return type", async () => {
       const result = await runWithCache(["mathlib", "add"]);
@@ -104,7 +108,12 @@ describe("Member Commands", () => {
     });
 
     it.todo("shows since version when present");
-    it.todo("shows related content (see references)");
+
+    it("shows related content (see references)", async () => {
+      const result = await runWithCache(["mathlib", "CalculatorOptions"]);
+      expect(result.stdout).toContain("See also:");
+      expect(result.stdout).toContain("Calculator");
+    });
 
     it("fails with exit code 3 when member not found", async () => {
       const result = await runWithCache(["mathlib", "nonexistent"]);
@@ -157,7 +166,12 @@ describe("Member Commands", () => {
         expect(result.stdout).toContain("list");
       });
 
-      it.todo("shows methods for class members");
+      it("shows methods for class members", async () => {
+        const result = await runWithCache(["mathlib", "Calculator"]);
+        expect(result.stdout).toContain("Members:");
+        expect(result.stdout).toContain("add [method]");
+        expect(result.stdout).toContain("multiply [method]");
+      });
     });
   });
 

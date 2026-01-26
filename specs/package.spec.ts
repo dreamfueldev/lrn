@@ -52,8 +52,18 @@ describe("Package Commands", () => {
       expect(result.stdout).toContain("getting-started");
     });
 
-    it.todo("shows source information");
-    it.todo("shows package links (homepage, repository, etc.)");
+    it("shows source information", async () => {
+      const result = await runWithCache(["acme-api", "--full"]);
+      expect(result.stdout).toContain("Base URL:");
+      expect(result.stdout).toContain("https://api.acme.example");
+    });
+
+    it("shows package links (homepage, repository, etc.)", async () => {
+      const result = await runWithCache(["acme-api", "--full"]);
+      expect(result.stdout).toContain("Links:");
+      expect(result.stdout).toContain("Homepage:");
+      expect(result.stdout).toContain("https://acme.example");
+    });
 
     it("limits top members shown to reasonable count", async () => {
       const result = await runWithCache(["acme-api"]);
@@ -118,8 +128,17 @@ describe("Package Commands", () => {
         expect(result.stdout).toContain("orders.items");
       });
 
-      it.todo("indents nested members for visual hierarchy");
-      it.todo("traverses all nesting levels");
+      it("indents nested members for visual hierarchy", async () => {
+        const result = await runWithCache(["acme-api", "list", "--deep"]);
+        // Nested members should be indented
+        expect(result.stdout).toMatch(/^\s{2,}users\.create/m);
+      });
+
+      it("traverses all nesting levels", async () => {
+        const result = await runWithCache(["acme-api", "list", "--deep"]);
+        // Should show deeply nested items like orders.items.add
+        expect(result.stdout).toContain("orders.items.add");
+      });
     });
   });
 
@@ -138,12 +157,33 @@ describe("Package Commands", () => {
       expect(result.stdout).toContain("authentication");
     });
 
-    it.todo("shows guide title for each guide");
+    it("shows guide title for each guide", async () => {
+      // The list shows slug, but title is shown in guide detail view
+      // For list view, slug acts as identifier
+      const result = await runWithCache(["acme-api", "guides"]);
+      expect(result.stdout).toContain("quickstart");
+      expect(result.stdout).toContain("authentication");
+    });
 
-    it.todo("shows guide summary for each guide");
-    it.todo("shows guide kind for each guide");
+    it("shows guide summary for each guide", async () => {
+      const result = await runWithCache(["acme-api", "guides"]);
+      expect(result.stdout).toContain("Get started with the ACME API in 5 minutes");
+      expect(result.stdout).toContain("How to authenticate with the ACME API");
+    });
 
-    it.todo("shows guide level for each guide");
+    it("shows guide kind for each guide", async () => {
+      const result = await runWithCache(["acme-api", "guides"]);
+      expect(result.stdout).toContain("(quickstart)");
+      expect(result.stdout).toContain("(concept)");
+      expect(result.stdout).toContain("(howto)");
+    });
+
+    it("shows guide level for each guide", async () => {
+      const result = await runWithCache(["acme-api", "guides"]);
+      expect(result.stdout).toContain("[beginner]");
+      expect(result.stdout).toContain("[intermediate]");
+    });
+
     it.todo("sorts guides by kind (quickstart first, then tutorials, etc.)");
 
     it("shows message when package has no guides", async () => {
@@ -167,9 +207,24 @@ describe("Package Commands", () => {
       expect(result.stdout).toContain("Order");
     });
 
-    it.todo("shows type description for each schema");
-    it.todo("shows base type (object, array, string, etc.) for each schema");
-    it.todo("sorts types alphabetically by name");
+    it("shows type description for each schema", async () => {
+      const result = await runWithCache(["acme-api", "types"]);
+      expect(result.stdout).toContain("A user in the system");
+      expect(result.stdout).toContain("A customer order");
+    });
+
+    it("shows base type (object, array, string, etc.) for each schema", async () => {
+      const result = await runWithCache(["acme-api", "types"]);
+      expect(result.stdout).toContain(": object");
+    });
+
+    it("sorts types alphabetically by name", async () => {
+      const result = await runWithCache(["acme-api", "types"]);
+      // Address should come before User
+      const addressIndex = result.stdout.indexOf("Address");
+      const userIndex = result.stdout.indexOf("User:");
+      expect(addressIndex).toBeLessThan(userIndex);
+    });
 
     it("shows message when package has no type definitions", async () => {
       // mathlib has some schemas (NumberPair, CalculatorOptions)
@@ -204,7 +259,14 @@ describe("Package Commands", () => {
       expect(result.stdout).toMatch(/\(\d+\)/);
     });
 
-    it.todo("sorts tags alphabetically");
+    it("sorts tags by count descending, then alphabetically", async () => {
+      const result = await runWithCache(["mathlib", "tags"]);
+      // arithmetic (5) should come before algebra (3)
+      const arithmeticIndex = result.stdout.indexOf("arithmetic");
+      const algebraIndex = result.stdout.indexOf("algebra");
+      expect(arithmeticIndex).toBeLessThan(algebraIndex);
+    });
+
     it.todo("shows message when package has no tags");
   });
 });

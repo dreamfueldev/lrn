@@ -63,8 +63,17 @@ describe("Type/Schema Commands", () => {
         expect(result.stdout).toContain("string");
       });
 
-      it.todo("shows property descriptions");
-      it.todo("indicates required properties");
+      it("shows property descriptions", async () => {
+        const result = await runWithCache(["acme-api", "type", "User"]);
+        expect(result.stdout).toContain("Unique identifier");
+        expect(result.stdout).toContain("email address");
+      });
+
+      it("indicates required properties", async () => {
+        const result = await runWithCache(["acme-api", "type", "User"]);
+        expect(result.stdout).toContain("(required)");
+      });
+
       it.todo("shows property default values");
       it.todo("shows property examples");
     });
@@ -75,7 +84,12 @@ describe("Type/Schema Commands", () => {
         expect(result.stdout).toContain("array");
       });
 
-      it.todo("shows items schema details");
+      it("shows items schema details", async () => {
+        const result = await runWithCache(["mathlib", "type", "NumberPair"]);
+        expect(result.stdout).toContain("Items:");
+        expect(result.stdout).toContain("number");
+      });
+
       it.todo("shows minLength constraint");
       it.todo("shows maxLength constraint");
     });

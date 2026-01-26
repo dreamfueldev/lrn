@@ -188,7 +188,12 @@ describe("Output Format Options", () => {
       expect(result.stdout).toContain("MathLib provides");
     });
 
-    it.todo("includes nested/child content");
+    it("includes nested/child content", async () => {
+      const result = await runWithCache(["--format", "text", "--full", "mathlib", "list"]);
+      // Calculator has nested children that should be shown with --full
+      expect(result.stdout).toContain("Calculator.value");
+      expect(result.stdout).toContain("Calculator.add");
+    });
 
     it("works with list commands", async () => {
       const result = await runWithCache(["--format", "text", "--full", "mathlib", "list"]);
@@ -229,8 +234,22 @@ describe("Output Format Options", () => {
       }
     });
 
-    it.todo("all show commands support all formats");
-    it.todo("all search commands support all formats");
+    it("all show commands support all formats", async () => {
+      const formats = ["text", "json", "markdown", "summary"];
+      for (const format of formats) {
+        const result = await runWithCache(["--format", format, "mathlib", "add"]);
+        expect(result.exitCode).toBe(0);
+      }
+    });
+
+    it("all search commands support all formats", async () => {
+      const formats = ["text", "json", "markdown", "summary"];
+      for (const format of formats) {
+        const result = await runWithCache(["--format", format, "search", "add"]);
+        expect(result.exitCode).toBe(0);
+      }
+    });
+
     it.todo("format output is consistent across command types");
   });
 });
