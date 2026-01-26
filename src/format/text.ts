@@ -15,7 +15,7 @@ export function formatText(data: FormattableData, options: FormatOptions): strin
     if (data.length === 0) return "No items found.";
 
     // Check first item to determine type
-    const first = data[0];
+    const first = data[0]!;
     if ("members" in first) {
       // Package[]
       return formatPackageList(data as Package[]);

@@ -143,7 +143,7 @@ export function parseArgs(argv: string[]): ParsedArgs {
       continue;
     }
     if (arg === "--tag" && i + 1 < args.length) {
-      result.options.tag.push(args[i + 1]);
+      result.options.tag.push(args[i + 1]!);
       i += 2;
       continue;
     }
@@ -164,15 +164,15 @@ export function parseArgs(argv: string[]): ParsedArgs {
     }
 
     // Unknown flag
-    if (arg.startsWith("-")) {
+    if (arg!.startsWith("-")) {
       // Store it in positional for error handling
-      result.positional.push(arg);
+      result.positional.push(arg!);
       i++;
       continue;
     }
 
     // Positional argument
-    result.positional.push(arg);
+    result.positional.push(arg!);
     i++;
   }
 
@@ -202,7 +202,7 @@ function interpretPositionalArgs(result: ParsedArgs): void {
     return;
   }
 
-  const first = pos[0];
+  const first = pos[0]!;
 
   // Global commands (no package context)
   const globalCommands = ["sync", "add", "remove", "versions", "search"];
@@ -223,7 +223,7 @@ function interpretPositionalArgs(result: ParsedArgs): void {
     return;
   }
 
-  const second = result.positional[0];
+  const second = result.positional[0]!;
 
   // Package subcommands
   const packageCommands = [
@@ -305,10 +305,10 @@ export function getUnknownFlags(args: ParsedArgs): string[] {
   const unknownFlags: string[] = [];
   let i = 0;
   while (i < args.raw.length) {
-    const arg = args.raw[i];
+    const arg = args.raw[i]!;
     if (arg.startsWith("-")) {
       // Check if it's a known flag
-      const flagBase = arg.split("=")[0]; // Handle --flag=value style
+      const flagBase = arg.split("=")[0]!; // Handle --flag=value style
       if (!knownFlags.has(flagBase)) {
         unknownFlags.push(arg);
       }

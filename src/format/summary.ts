@@ -15,7 +15,7 @@ export function formatSummary(data: FormattableData, options: FormatOptions): st
   if (Array.isArray(data)) {
     if (data.length === 0) return "";
 
-    const first = data[0];
+    const first = data[0]!;
     if ("members" in first) {
       return formatPackageList(data as Package[]);
     }

@@ -44,7 +44,7 @@ export function runTypes(args: ParsedArgs, config: ResolvedConfig): void {
     lines.push("# Types");
     lines.push("");
     for (const name of names) {
-      const schema = schemas[name];
+      const schema = schemas[name]!;
       const type = schema.type || schema.$ref || "object";
       const desc = schema.description ? ` - ${schema.description}` : "";
       lines.push(`- \`${name}\` (${type})${desc}`);
@@ -52,7 +52,7 @@ export function runTypes(args: ParsedArgs, config: ResolvedConfig): void {
   } else {
     lines.push(`Types (${names.length}):`);
     for (const name of names) {
-      const schema = schemas[name];
+      const schema = schemas[name]!;
       const type = schema.type || schema.$ref || "object";
       const desc = schema.description ? `  ${schema.description}` : "";
       lines.push(`  ${name}: ${type}${desc}`);

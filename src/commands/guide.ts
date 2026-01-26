@@ -18,11 +18,15 @@ export function runGuide(args: ParsedArgs, config: ResolvedConfig): void {
   const version = args.packageVersion;
   const slugPath = args.positional[0];
 
+  if (!slugPath) {
+    throw new GuideNotFoundError(packageName, "");
+  }
+
   const pkg = loadPackage(config, packageName, version);
 
   // Parse slug.section.subsection path
   const parts = slugPath.split(".");
-  const slug = parts[0];
+  const slug = parts[0]!;
   const sectionPath = parts.slice(1);
 
   // Find the guide

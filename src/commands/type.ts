@@ -15,6 +15,10 @@ export function runType(args: ParsedArgs, config: ResolvedConfig): void {
   const version = args.packageVersion;
   const typeName = args.positional[0];
 
+  if (!typeName) {
+    throw new TypeNotFoundError(packageName, "");
+  }
+
   const pkg = loadPackage(config, packageName, version);
 
   if (!pkg.schemas) {

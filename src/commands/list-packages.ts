@@ -18,7 +18,7 @@ export function runListPackages(args: ParsedArgs, config: ResolvedConfig): void 
   }
 
   // Load full package data for display
-  const packages = cachedPackages.map((info) => loadPackage(config, info.name, info.latestVersion));
+  const packages = cachedPackages.map((info) => loadPackage(config, info.name, info.version));
 
   const outputFormat = getOutputFormat(args, config);
   const options: FormatOptions = {

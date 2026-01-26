@@ -14,7 +14,7 @@ export function formatMarkdown(data: FormattableData, options: FormatOptions): s
   if (Array.isArray(data)) {
     if (data.length === 0) return "*No items found.*";
 
-    const first = data[0];
+    const first = data[0]!;
     if ("members" in first) {
       return formatPackageList(data as Package[]);
     }

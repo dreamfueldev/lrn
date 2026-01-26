@@ -37,7 +37,7 @@ export async function runCommand(args: ParsedArgs): Promise<CommandResult> {
   // Check for unknown flags first
   const unknownFlags = getUnknownFlags(args);
   if (unknownFlags.length > 0) {
-    printUnknownOption(unknownFlags[0]);
+    printUnknownOption(unknownFlags[0]!);
     return { exitCode: 1 };
   }
 

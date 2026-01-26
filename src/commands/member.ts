@@ -16,6 +16,10 @@ export function runMember(args: ParsedArgs, config: ResolvedConfig): void {
   const version = args.packageVersion;
   const memberPath = args.positional[0];
 
+  if (!memberPath) {
+    throw new MemberNotFoundError(packageName, "");
+  }
+
   const pkg = loadPackage(config, packageName, version);
 
   const member = resolveMemberPath(pkg.members, memberPath);

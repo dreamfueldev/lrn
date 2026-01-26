@@ -104,13 +104,13 @@ export function loadPackage(
     if (!files.includes(targetFile)) {
       throw new PackageNotFoundError(
         `${name}@${version}`,
-        files.length > 0 ? `${name}@${basename(files[0], ".lrn.json")}` : undefined
+        files.length > 0 ? `${name}@${basename(files[0]!, ".lrn.json")}` : undefined
       );
     }
   } else {
     // Use latest (last when sorted)
     const sorted = files.sort();
-    targetFile = sorted[sorted.length - 1];
+    targetFile = sorted[sorted.length - 1]!;
   }
 
   const pkgPath = join(pkgDir, targetFile);
