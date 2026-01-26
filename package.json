@@ -8,16 +8,15 @@
   },
   "files": ["dist"],
   "scripts": {
-    "build": "tsup",
-    "dev": "tsup --watch",
+    "build": "bun build src/index.ts --outfile dist/index.js --target node --packages external && echo '#!/usr/bin/env node' | cat - dist/index.js > dist/index.tmp.js && mv dist/index.tmp.js dist/index.js && chmod +x dist/index.js",
+    "dev": "bun --watch src/index.ts",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run",
+    "test": "bun test",
     "clean": "rm -rf dist node_modules"
   },
   "devDependencies": {
-    "tsup": "^8.0.0",
-    "typescript": "^5.7.0",
-    "vitest": "^2.0.0"
+    "@types/bun": "latest",
+    "typescript": "^5.7.0"
   },
   "engines": {
     "node": ">=18"

@@ -40,8 +40,7 @@ lrn/
 │   └── fixtures/          # Test fixture data
 ├── package.json
 ├── tsconfig.json
-├── tsup.config.ts
-└── vitest.config.ts
+└── bunfig.toml
 ```
 
 Separate repo for registry data: `admin-dreamfuel/lrn-registry`
@@ -49,8 +48,7 @@ Separate repo for registry data: `admin-dreamfuel/lrn-registry`
 ## Tech Stack
 
 - **Language**: TypeScript (ESM)
-- **Build**: tsup
-- **Test**: vitest
+- **Runtime/Toolchain**: Bun (package manager, bundler, test runner)
 - **CLI**: Node.js target (for npm compatibility)
 
 ## The IR (Intermediate Representation)
@@ -136,11 +134,11 @@ Key flags: `--format (text|json|markdown|summary)`, `--full`, `--deep`, `--tag`,
 ## Commands
 
 ```bash
-pnpm install          # Install dependencies
-pnpm build            # Build CLI
-pnpm dev              # Dev mode (watch)
-pnpm test             # Run tests
-pnpm typecheck        # TypeScript checking
+bun install           # Install dependencies
+bun run build         # Build CLI
+bun run dev           # Dev mode (watch)
+bun test              # Run tests
+bun run typecheck     # TypeScript checking
 ```
 
 ## Key Files

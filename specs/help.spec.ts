@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll } from "vitest";
+import { describe, it, expect, beforeAll } from "bun:test";
 import { execSync } from "node:child_process";
 import { join } from "node:path";
 
@@ -29,7 +29,7 @@ describe("Help and Version", () => {
   beforeAll(() => {
     // Ensure CLI is built
     try {
-      execSync("pnpm build", { cwd: join(__dirname, ".."), stdio: "pipe" });
+      execSync("bun run build", { cwd: join(__dirname, ".."), stdio: "pipe" });
     } catch {
       // Build might fail in some test environments, that's ok
     }
