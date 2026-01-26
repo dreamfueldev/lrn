@@ -121,15 +121,23 @@ Key flags: `--format (text|json|markdown|summary)`, `--full`, `--deep`, `--tag`,
 
 ## Current Status
 
-- [x] CLI implementation with 149 passing tests
+- [x] CLI implementation with 213 passing tests (see `TEST_PROGRESS.md` for details)
 - [x] IR schema with Package, Member, Guide, Schema types
 - [x] Output formatters (text, json, markdown, summary)
 - [x] Package cache and config system
-- [x] Search functionality
-- [ ] Registry API service
+- [x] Search functionality (members, guides, tags, descriptions)
+- [x] Filtering (--tag, --kind, --deprecated, combinations)
+- [ ] Registry API service (blocks: sync, add, remove, versions commands)
 - [ ] OpenAPI adapter
 - [ ] TypeScript adapter
 - [ ] Crawl + LLM extraction pipeline
+
+### Test Progress
+
+See `TEST_PROGRESS.md` for detailed tracking of:
+- 213 passing tests, 241 TODO tests (47% complete)
+- Categorized remaining work (registry features, config system, HTTP details, etc.)
+- Priority order for implementation
 
 ## Commands
 
@@ -150,3 +158,22 @@ bun run typecheck     # TypeScript checking
 - `src/cache.ts` - Package loading from ~/.lrn/packages/
 - `src/config.ts` - Config loading (lrn.config.json)
 - `specs/fixtures/` - Test fixture packages (mathlib, acme-api)
+- `TEST_PROGRESS.md` - Test implementation tracking
+
+## Test Fixtures
+
+Two fixture packages in `specs/fixtures/packages/`:
+
+- **mathlib** - TypeScript library example (functions, classes, types)
+  - Functions: add, subtract, multiply, divide, sqrt, pow
+  - Classes: Calculator (with methods), Vector
+  - Types: NumberPair, CalculatorOptions
+  - Includes deprecated member (oldSum) and nested children
+
+- **acme-api** - REST API example (OpenAPI-style)
+  - Namespaces: users, products, orders (with nested items)
+  - HTTP methods with paths, query params, request/response schemas
+  - Multiple guides: quickstart, authentication, webhooks
+  - Rich schema definitions: User, Product, Order, etc.
+
+Tests use `createTestCache()` to set up a temporary cache with fixtures.
