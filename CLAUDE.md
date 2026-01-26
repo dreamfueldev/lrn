@@ -15,8 +15,6 @@ lrn stripe list --tag $(lrn stripe tags | grep -i payment) | \
   jq '[.[] | select(.method == "POST")]'
 ```
 
-TODO: Show the hypothetical result from this query here, then show the comparison to do the same thing with web search or reading markdown files.
-
 ## Business Model
 
 - **Open source CLI, monetized registry**: The CLI is free, the maintained registry of package documentation is the product
@@ -24,49 +22,56 @@ TODO: Show the hypothetical result from this query here, then show the compariso
 - **Crawl + LLM pipeline**: Docs sites are crawled, LLM extracts structure, humans QA, then published to registry
 - **Long-term**: Once critical mass is reached, package maintainers will optimize their docs for lrn compatibility
 
-## Monorepo Structure
+## Project Structure
 
 ```
 lrn/
-├── apps/
-│   ├── cli/          # The lrn CLI (npm package)
-│   ├── api/          # Registry API service (Hono)
-│   └── web/          # Marketing + docs site (Astro)
-├── packages/
-│   ├── schema/       # IR type definitions (the core data model)
-│   ├── core/         # Query engine, search functionality
-│   ├── adapters/     # Parsers: OpenAPI, TypeScript, etc.
-│   └── crawler/      # Docs crawling + LLM extraction (internal)
+├── src/
+│   ├── index.ts           # CLI entry point
+│   ├── args.ts            # Argument parsing
+│   ├── cache.ts           # Package cache management
+│   ├── config.ts          # Configuration loading
+│   ├── errors.ts          # Error types
+│   ├── schema/            # IR type definitions
+│   │   └── index.ts
+│   ├── format/            # Output formatters (text, json, markdown, summary)
+│   └── commands/          # CLI command implementations
+├── specs/                 # Test specifications
+│   └── fixtures/          # Test fixture data
+├── package.json
+├── tsconfig.json
+├── tsup.config.ts
+└── vitest.config.ts
 ```
 
 Separate repo for registry data: `admin-dreamfuel/lrn-registry`
 
 ## Tech Stack
 
-- **Monorepo**: Turborepo + pnpm workspaces
 - **Language**: TypeScript (ESM)
 - **Build**: tsup
+- **Test**: vitest
 - **CLI**: Node.js target (for npm compatibility)
-- **API**: Hono (lightweight, runs anywhere)
-- **Web**: Astro (static marketing + docs)
 
 ## The IR (Intermediate Representation)
 
-The IR is defined in `packages/schema/src/index.ts`. Key types:
+The IR is defined in `src/schema/index.ts`. Key types:
 
 ```typescript
 interface Package {
   name: string;
   version?: string;
+  summary?: string;
   description?: string;
   source: SourceInfo;          // where this came from (openapi, typescript, etc.)
-  members: Member[];           // top-level interface members
-  schemas?: Record<string, Schema>;  // reusable type definitions
+  members: Member[];           // structured API documentation
+  guides: Guide[];             // prose documentation
+  schemas: Record<string, Schema>;  // reusable type definitions
 }
 
 interface Member {
   name: string;                // e.g., "charges.create" or "useState"
-  kind: 'function' | 'class' | 'namespace' | 'constant' | 'type';
+  kind: 'function' | 'method' | 'class' | 'namespace' | 'constant' | 'type' | 'property';
   summary?: string;            // one-liner for list views
   description?: string;        // full description
   signature?: string;          // human-readable: "(options: Config) => Client"
@@ -77,6 +82,16 @@ interface Member {
   children?: Member[];         // nested members (class methods, namespace members)
   http?: HttpInfo;             // HTTP-specific (only for REST endpoints)
 }
+
+interface Guide {
+  slug: string;                // URL-friendly identifier
+  title: string;
+  summary?: string;
+  intro?: string;
+  sections: Section[];
+  kind: 'quickstart' | 'tutorial' | 'concept' | 'howto' | 'example';
+  tags?: string[];
+}
 ```
 
 **Design rationale**:
@@ -85,78 +100,55 @@ interface Member {
 - `http` is optional extension - HTTP details don't pollute the core model
 - `children` enables nesting (class methods, namespace members)
 - `summary` vs `description` - summary for lists, description for detail views
+- `guides` provides prose documentation alongside API reference
 
-## CLI Interface (Target Design)
-
-From the man page design:
+## CLI Interface
 
 ```bash
+lrn                            # List all cached packages
 lrn sync                       # Sync specs for project dependencies
-lrn list [package]             # List packages or members
-lrn show <package.member>      # Show member details
-lrn search <query>             # Search across packages
-lrn tags <package>             # List available tags
-lrn example <package.member>   # Show usage examples
+lrn <package>                  # Show package overview
+lrn <package> list             # List members
+lrn <package> <member.path>    # Show member details
+lrn <package> guides           # List guides
+lrn <package> guide <slug>     # Show guide
+lrn <package> types            # List schemas
+lrn <package> type <name>      # Show schema details
+lrn <package> tags             # List tags with counts
+lrn <package> search <query>   # Search within package
+lrn search <query>             # Search across all packages
 ```
 
-Key flags: `--format (text|json|markdown)`, `--summary`, `--signature`, `--tag`, `--type`
-
-## Adapters Strategy
-
-The adapter system reads different spec formats into the common IR:
-
-1. **OpenAPI adapter** (priority 1): Parse OpenAPI/Swagger specs
-2. **TypeScript adapter** (priority 2): Extract from .d.ts files via JSDoc comments + signatures
-3. **Custom adapter**: For edge cases where no standard spec exists
-
-The approach: leverage existing ecosystem specs (OpenAPI, TypeScript types), normalize on read into IR.
-
-## npm Integration Vision
-
-```json
-{
-  "scripts": {
-    "postinstall": "lrn sync"
-  }
-}
-```
-
-`lrn sync` reads package.json, checks registry for each dependency, downloads specs to `~/.lrn/packages/`. Zero friction for developers - specs are always available for their actual dependencies.
+Key flags: `--format (text|json|markdown|summary)`, `--full`, `--deep`, `--tag`, `--kind`, `--json`
 
 ## Current Status
 
-- [x] Monorepo structure created
-- [x] IR schema defined in `packages/schema`
-- [x] Basic query/search in `packages/core`
-- [ ] OpenAPI adapter implementation
-- [ ] TypeScript adapter implementation
-- [ ] CLI commands implementation
-- [ ] Registry API endpoints
+- [x] CLI implementation with 149 passing tests
+- [x] IR schema with Package, Member, Guide, Schema types
+- [x] Output formatters (text, json, markdown, summary)
+- [x] Package cache and config system
+- [x] Search functionality
+- [ ] Registry API service
+- [ ] OpenAPI adapter
+- [ ] TypeScript adapter
 - [ ] Crawl + LLM extraction pipeline
-- [ ] Web marketing site
-
-## Next Steps (Suggested Priority)
-
-1. **Implement OpenAPI adapter**: Parse a real OpenAPI spec (Stripe, GitHub) into IR
-2. **Implement basic CLI commands**: `lrn list`, `lrn show`, `lrn search` against local files
-3. **Test with real data**: Validate token efficiency claims with actual API queries
-4. **Build registry structure**: Define how packages are stored/versioned in lrn-registry repo
 
 ## Commands
 
 ```bash
-pnpm install          # Install all dependencies
-pnpm build            # Build all packages
+pnpm install          # Install dependencies
+pnpm build            # Build CLI
 pnpm dev              # Dev mode (watch)
+pnpm test             # Run tests
 pnpm typecheck        # TypeScript checking
 ```
 
 ## Key Files
 
-- `packages/schema/src/index.ts` - IR type definitions
-- `packages/core/src/query.ts` - Query by dot-notation path
-- `packages/core/src/search.ts` - Text search across packages
-- `packages/adapters/src/openapi.ts` - OpenAPI parser (stub)
-- `packages/adapters/src/typescript.ts` - TypeScript parser (stub)
-- `apps/cli/src/index.ts` - CLI entry point
-- `apps/api/src/index.ts` - Hono API server
+- `src/schema/index.ts` - IR type definitions
+- `src/index.ts` - CLI entry point
+- `src/commands/` - Command implementations
+- `src/format/` - Output formatters
+- `src/cache.ts` - Package loading from ~/.lrn/packages/
+- `src/config.ts` - Config loading (lrn.config.json)
+- `specs/fixtures/` - Test fixture packages (mathlib, acme-api)
