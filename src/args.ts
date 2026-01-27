@@ -212,7 +212,7 @@ function interpretPositionalArgs(result: ParsedArgs): void {
   const first = pos[0]!;
 
   // Global commands (no package context)
-  const globalCommands = ["sync", "add", "remove", "versions", "search", "parse", "format"];
+  const globalCommands = ["sync", "add", "remove", "versions", "search", "parse", "format", "crawl"];
   if (globalCommands.includes(first)) {
     result.command = first;
     result.positional = pos.slice(1);
@@ -309,6 +309,13 @@ export function getUnknownFlags(args: ParsedArgs): string[] {
     "--registry",
     "--out",
     "-o",
+    // Crawl command flags
+    "--depth",
+    "--rate",
+    "--output",
+    "--include",
+    "--exclude",
+    "--dry-run",
   ]);
 
   const unknownFlags: string[] = [];

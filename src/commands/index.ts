@@ -27,6 +27,7 @@ import { runTags } from "./tags.js";
 import { runSearch } from "./search.js";
 import { runParse } from "./parse.js";
 import { runFormatDir } from "./format-dir.js";
+import { runCrawl } from "./crawl.js";
 
 export interface CommandResult {
   exitCode: number;
@@ -140,6 +141,10 @@ export async function runCommand(args: ParsedArgs): Promise<CommandResult> {
         // Without --out, fall through to show help
         console.log("Usage: lrn format <file.json> --out <directory>");
         return { exitCode: 1 };
+
+      case "crawl":
+        await runCrawl(args);
+        return { exitCode: 0 };
 
       default:
         // Check if this might be a member path (contains dots or positional[0] exists)

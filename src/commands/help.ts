@@ -61,6 +61,7 @@ Discovery Commands:
   add <package>       Add a package to the local cache
   remove <package>    Remove a package from the local cache
   versions <package>  List available versions for a package
+  crawl <url>         Crawl documentation from a URL
 
 Authoring Commands:
   parse <directory>           Parse markdown directory to IR JSON
@@ -349,6 +350,41 @@ Round-trip example:
   lrn format api.lrn.json --out /tmp/docs
   lrn parse /tmp/docs --out api-roundtrip.lrn.json
 `,
+
+  crawl: `
+lrn crawl - Fetch documentation from URLs
+
+Usage: lrn crawl <url> [options]
+
+Crawls documentation from a URL and converts it to markdown.
+Supports llms.txt discovery for structured documentation sites.
+
+Arguments:
+  <url>               URL to crawl (site root, specific page, or llms.txt)
+
+Options:
+  --depth <n>         Maximum link following depth (default: 1)
+  --rate <n>          Requests per second (default: 2)
+  --output <dir>      Custom output directory
+  --include <pattern> Include URLs matching glob pattern (can repeat)
+  --exclude <pattern> Exclude URLs matching glob pattern (can repeat)
+  --dry-run           Show what would be fetched without fetching
+  --verbose           Show detailed output
+  --quiet, -q         Suppress non-essential output
+
+Output:
+  Crawled files are saved to ~/.lrn/crawled/<domain>/
+  A _meta.json file tracks crawl metadata.
+
+Examples:
+  lrn crawl https://docs.stripe.com              Crawl site (auto-detect llms.txt)
+  lrn crawl https://docs.stripe.com/llms.txt     Crawl from llms.txt
+  lrn crawl https://htmx.org --depth 2           Follow links 2 levels deep
+  lrn crawl https://example.com/docs --dry-run   Preview what would be fetched
+  lrn crawl <url> --include "api/*"              Only crawl API pages
+  lrn crawl <url> --exclude "blog/*"             Skip blog pages
+  lrn crawl <url> --rate 1                       Slow down to 1 req/s
+`,
 };
 
 /**
@@ -385,6 +421,7 @@ export function printUnknownCommand(command: string): void {
     "tags",
     "parse",
     "format",
+    "crawl",
   ];
   const similar = allCommands.filter(
     (c) => c.includes(command) || command.includes(c)

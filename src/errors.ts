@@ -182,6 +182,21 @@ export class ArgumentError extends CLIError {
 }
 
 /**
+ * Error for crawl operations
+ */
+export class CrawlError extends CLIError {
+  readonly url?: string;
+  readonly statusCode?: number;
+
+  constructor(message: string, url?: string, statusCode?: number) {
+    super(message, ExitCode.NETWORK_ERROR);
+    this.name = "CrawlError";
+    this.url = url;
+    this.statusCode = statusCode;
+  }
+}
+
+/**
  * Format an error for display
  */
 export function formatError(error: CLIError, verbose: boolean = false): string {
