@@ -25,6 +25,8 @@ import { runTypes } from "./types.js";
 import { runType } from "./type.js";
 import { runTags } from "./tags.js";
 import { runSearch } from "./search.js";
+import { runParse } from "./parse.js";
+import { runFormatDir } from "./format-dir.js";
 
 export interface CommandResult {
   exitCode: number;
@@ -124,6 +126,20 @@ export async function runCommand(args: ParsedArgs): Promise<CommandResult> {
       case "versions":
         console.log("lrn versions - not yet implemented (requires registry)");
         return { exitCode: 0 };
+
+      case "parse":
+        await runParse(args, config);
+        return { exitCode: 0 };
+
+      case "format":
+        // Format to directory requires --out option
+        if (args.options.out) {
+          runFormatDir(args, config);
+          return { exitCode: 0 };
+        }
+        // Without --out, fall through to show help
+        console.log("Usage: lrn format <file.json> --out <directory>");
+        return { exitCode: 1 };
 
       default:
         // Check if this might be a member path (contains dots or positional[0] exists)

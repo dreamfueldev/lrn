@@ -32,6 +32,7 @@ export interface ParsedArgs {
     kind: string | undefined;
     config: string | undefined;
     registry: string | undefined;
+    out: string | undefined;
   };
 
   /** Package name (with optional @version) */
@@ -72,6 +73,7 @@ export function parseArgs(argv: string[]): ParsedArgs {
       kind: undefined,
       config: undefined,
       registry: undefined,
+      out: undefined,
     },
     package: undefined,
     packageVersion: undefined,
@@ -162,6 +164,11 @@ export function parseArgs(argv: string[]): ParsedArgs {
       i += 2;
       continue;
     }
+    if ((arg === "--out" || arg === "-o") && i + 1 < args.length) {
+      result.options.out = args[i + 1];
+      i += 2;
+      continue;
+    }
 
     // Unknown flag
     if (arg!.startsWith("-")) {
@@ -205,7 +212,7 @@ function interpretPositionalArgs(result: ParsedArgs): void {
   const first = pos[0]!;
 
   // Global commands (no package context)
-  const globalCommands = ["sync", "add", "remove", "versions", "search"];
+  const globalCommands = ["sync", "add", "remove", "versions", "search", "parse", "format"];
   if (globalCommands.includes(first)) {
     result.command = first;
     result.positional = pos.slice(1);
@@ -300,6 +307,8 @@ export function getUnknownFlags(args: ParsedArgs): string[] {
     "--kind",
     "--config",
     "--registry",
+    "--out",
+    "-o",
   ]);
 
   const unknownFlags: string[] = [];
@@ -318,7 +327,9 @@ export function getUnknownFlags(args: ParsedArgs): string[] {
           arg === "--tag" ||
           arg === "--kind" ||
           arg === "--config" ||
-          arg === "--registry") &&
+          arg === "--registry" ||
+          arg === "--out" ||
+          arg === "-o") &&
         i + 1 < args.raw.length
       ) {
         i++;

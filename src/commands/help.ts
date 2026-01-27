@@ -62,6 +62,10 @@ Discovery Commands:
   remove <package>    Remove a package from the local cache
   versions <package>  List available versions for a package
 
+Authoring Commands:
+  parse <directory>           Parse markdown directory to IR JSON
+  format <file> --out <dir>   Format IR JSON to markdown directory
+
 Package Commands:
   <package>                   Show package overview
   <package> list              List all members
@@ -277,6 +281,74 @@ Examples:
   lrn stripe type Charge
   lrn acme-api type User --json
 `,
+
+  parse: `
+lrn parse - Parse markdown directory to IR JSON
+
+Usage: lrn parse <directory> [options]
+
+Parses a markdown documentation directory into lrn IR (Intermediate
+Representation) JSON format. This enables authoring documentation in
+markdown and converting it to the structured format lrn uses.
+
+Arguments:
+  <directory>         Path to markdown documentation directory
+
+Expected directory structure:
+  <directory>/
+  ├── index.md        Package metadata (name, version, summary)
+  ├── members/        API member documentation
+  │   ├── function.md
+  │   └── Class/
+  │       └── method.md
+  ├── guides/         Prose documentation
+  │   └── getting-started.md
+  └── types/          Schema/type definitions
+      └── User.md
+
+Options:
+  --out, -o <file>    Write output to file instead of stdout
+
+Examples:
+  lrn parse ./docs                        Output IR to stdout
+  lrn parse ./docs --out package.lrn.json Write to file
+  lrn parse ./docs | jq '.members'        Pipe to jq
+`,
+
+  format: `
+lrn format - Format IR JSON to markdown directory
+
+Usage: lrn format <file> --out <directory>
+
+Converts lrn IR (Intermediate Representation) JSON to a markdown
+documentation directory. This is the inverse of 'lrn parse'.
+
+Arguments:
+  <file>              Path to IR JSON file (*.lrn.json)
+
+Options:
+  --out, -o <dir>     Output directory (required)
+
+Generated directory structure:
+  <directory>/
+  ├── index.md        Package metadata
+  ├── members/        API member files
+  │   ├── function.md
+  │   └── Class/
+  │       └── method.md
+  ├── guides/         Guide files
+  │   └── getting-started.md
+  └── types/          Schema files
+      └── User.md
+
+Examples:
+  lrn format stripe.lrn.json --out ./stripe-docs
+  lrn format package.json -o ./docs
+
+Round-trip example:
+  lrn format api.lrn.json --out /tmp/docs
+  lrn parse /tmp/docs --out api-roundtrip.lrn.json
+`,
 };
 
 /**
@@ -311,6 +383,8 @@ export function printUnknownCommand(command: string): void {
     "guides",
     "types",
     "tags",
+    "parse",
+    "format",
   ];
   const similar = allCommands.filter(
     (c) => c.includes(command) || command.includes(c)
