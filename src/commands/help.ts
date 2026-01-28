@@ -66,6 +66,7 @@ Discovery Commands:
 Authoring Commands:
   parse <directory>           Parse markdown directory to IR JSON
   format <file> --out <dir>   Format IR JSON to markdown directory
+  health <path>               Validate lrn-compatible markdown
 
 Package Commands:
   <package>                   Show package overview
@@ -385,6 +386,43 @@ Examples:
   lrn crawl <url> --exclude "blog/*"             Skip blog pages
   lrn crawl <url> --rate 1                       Slow down to 1 req/s
 `,
+
+  health: `
+lrn health - Validate lrn-compatible markdown
+
+Usage: lrn health <path> [options]
+
+Validates markdown documentation against the lrn specification,
+reports compliance issues, calculates a health score, and estimates
+token costs for LLM consumption.
+
+Arguments:
+  <path>              Directory or file to check
+
+Options:
+  --json              Output as JSON
+  --verbose           Show all issues including info
+  --errors            Only show errors
+  --warnings          Show errors and warnings (default)
+  --fix               Auto-fix simple issues (not yet implemented)
+
+Check Categories:
+  Structure (S001-S006)   - File structure and required elements
+  Content (C001-C006)     - Documentation completeness
+  Format (F001-F005)      - Formatting requirements
+  Reference (R001-R004)   - Link validation
+
+Exit Codes:
+  0                   No errors (warnings/info ok)
+  1                   Errors present
+
+Examples:
+  lrn health ./docs/stripe            Check a directory
+  lrn health ./docs/stripe/index.md   Check a single file
+  lrn health ./docs --json            JSON output for CI
+  lrn health ./docs --errors          Only show errors
+  lrn health ./docs --verbose         Show all issues
+`,
 };
 
 /**
@@ -422,6 +460,7 @@ export function printUnknownCommand(command: string): void {
     "parse",
     "format",
     "crawl",
+    "health",
   ];
   const similar = allCommands.filter(
     (c) => c.includes(command) || command.includes(c)

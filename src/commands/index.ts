@@ -28,6 +28,7 @@ import { runSearch } from "./search.js";
 import { runParse } from "./parse.js";
 import { runFormatDir } from "./format-dir.js";
 import { runCrawl } from "./crawl.js";
+import { runHealthCommand } from "./health.js";
 
 export interface CommandResult {
   exitCode: number;
@@ -145,6 +146,11 @@ export async function runCommand(args: ParsedArgs): Promise<CommandResult> {
       case "crawl":
         await runCrawl(args);
         return { exitCode: 0 };
+
+      case "health": {
+        const exitCode = await runHealthCommand(args);
+        return { exitCode };
+      }
 
       default:
         // Check if this might be a member path (contains dots or positional[0] exists)
