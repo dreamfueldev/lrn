@@ -13,7 +13,7 @@ export function formatJsonOutput(
   result: HealthResult,
   _options: HealthOptions = {}
 ): string {
-  // Create output object matching the PDR specification
+  // Create output object matching the PRD specification
   const output = {
     path: result.path,
     score: {

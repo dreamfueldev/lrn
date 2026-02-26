@@ -4,19 +4,13 @@
  * Universal CLI for learning and querying programming interfaces.
  */
 
-import { parseArgs } from "./args.js";
-import { runCommand } from "./commands/index.js";
+import { execute } from "./api.js";
 
 async function main(): Promise<void> {
-  const args = parseArgs(process.argv);
-  const result = await runCommand(args);
+  const result = await execute(process.argv);
+  if (result.stdout) process.stdout.write(result.stdout + "\n");
+  if (result.stderr) process.stderr.write(result.stderr + "\n");
   process.exit(result.exitCode);
 }
 
-main().catch((err) => {
-  console.error("Fatal error:", err.message);
-  if (process.env.LRN_DEBUG) {
-    console.error(err.stack);
-  }
-  process.exit(1);
-});
+main();

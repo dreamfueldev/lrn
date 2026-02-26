@@ -9,7 +9,7 @@ import type { ResolvedConfig } from "../config.js";
 import { loadPackage } from "../cache.js";
 import { format, getOutputFormat, type FormatOptions } from "../format/index.js";
 
-export function runPackage(args: ParsedArgs, config: ResolvedConfig): void {
+export function runPackage(args: ParsedArgs, config: ResolvedConfig): string {
   const packageName = args.package!;
   const version = args.packageVersion;
 
@@ -22,5 +22,5 @@ export function runPackage(args: ParsedArgs, config: ResolvedConfig): void {
     packageName,
   };
 
-  console.log(format(pkg, options));
+  return format(pkg, options);
 }

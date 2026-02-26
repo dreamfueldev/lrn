@@ -1,0 +1,127 @@
+{
+  "name": "uikit",
+  "version": "3.0.0",
+  "summary": "A modern UI component library",
+  "description": "UIKit provides accessible, themeable UI components for building web applications.",
+  "source": {
+    "type": "markdown",
+    "url": "https://github.com/example/uikit",
+    "generatedAt": "2026-01-15T10:00:00Z"
+  },
+  "tags": ["ui", "components"],
+  "members": [
+    {
+      "name": "Button",
+      "kind": "component",
+      "summary": "A clickable button element with variants",
+      "description": "The Button component renders a styled button with support for primary, secondary, and outline variants. Supports disabled state and loading indicators.",
+      "signature": "<button class=\"btn btn-{variant}\">{children}</button>",
+      "signatureLanguage": "html",
+      "parameters": [
+        {
+          "name": "variant",
+          "type": "string",
+          "description": "Visual style: primary, secondary, outline",
+          "required": false
+        },
+        {
+          "name": "disabled",
+          "type": "boolean",
+          "description": "Whether the button is disabled",
+          "required": false
+        },
+        {
+          "name": "size",
+          "type": "string",
+          "description": "Button size: sm, md, lg",
+          "required": false
+        }
+      ],
+      "examples": [
+        {
+          "title": "Primary button",
+          "language": "html",
+          "code": "<button class=\"btn btn-primary\">Click me</button>"
+        }
+      ],
+      "tags": ["interactive", "form"]
+    },
+    {
+      "name": "Card",
+      "kind": "component",
+      "summary": "A content container with optional header and footer",
+      "description": "Cards group related content and actions. Use card-header, card-body, and card-footer for structured layouts.",
+      "signature": "<div class=\"card\">\n  <div class=\"card-body\">{children}</div>\n</div>",
+      "signatureLanguage": "html",
+      "parameters": [
+        {
+          "name": "bordered",
+          "type": "boolean",
+          "description": "Show border around card",
+          "required": false
+        },
+        {
+          "name": "shadow",
+          "type": "string",
+          "description": "Shadow depth: sm, md, lg",
+          "required": false
+        }
+      ],
+      "tags": ["layout"]
+    },
+    {
+      "name": "Modal",
+      "kind": "component",
+      "summary": "An overlay dialog for focused interactions",
+      "description": "Modal displays content in a layer above the page. Requires explicit open/close handling. Traps focus when open for accessibility.",
+      "signature": "<dialog class=\"modal\">\n  <div class=\"modal-box\">{children}</div>\n</dialog>",
+      "signatureLanguage": "html",
+      "parameters": [
+        {
+          "name": "open",
+          "type": "boolean",
+          "description": "Whether the modal is visible",
+          "required": true
+        },
+        {
+          "name": "closable",
+          "type": "boolean",
+          "description": "Allow closing via backdrop click or Escape key",
+          "required": false
+        }
+      ],
+      "tags": ["interactive", "overlay"]
+    },
+    {
+      "name": "Badge",
+      "kind": "component",
+      "summary": "A small label for status or counts",
+      "signature": "<span class=\"badge badge-{variant}\">{text}</span>",
+      "signatureLanguage": "html",
+      "tags": ["display"]
+    }
+  ],
+  "guides": [
+    {
+      "slug": "color-system",
+      "title": "Color System",
+      "summary": "How UIKit theming and colors work",
+      "kind": "concept",
+      "sections": [
+        {
+          "id": "overview",
+          "title": "Overview",
+          "summary": "Color system basics",
+          "content": "UIKit uses CSS custom properties for theming. All components reference semantic color tokens like `--color-primary` and `--color-surface`."
+        },
+        {
+          "id": "customization",
+          "title": "Customization",
+          "summary": "Override theme colors",
+          "content": "Override colors by setting CSS custom properties on the `:root` selector or any parent element for scoped theming."
+        }
+      ]
+    }
+  ],
+  "schemas": {}
+}

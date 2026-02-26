@@ -36,7 +36,11 @@ describe("Output Format Options", () => {
       expect(result.stdout).toContain("Members");
     });
 
-    it.todo("uses appropriate spacing between sections");
+    it("uses appropriate spacing between sections", async () => {
+      const result = await runWithCache(["--format", "text", "mathlib", "add"]);
+      // There should be blank lines separating sections (Parameters, Returns, Examples, etc.)
+      expect(result.stdout).toContain("\n\n");
+    });
     it.todo("wraps long lines appropriately");
     it.todo("uses colors when terminal supports it");
 
@@ -90,6 +94,40 @@ describe("Output Format Options", () => {
       expect(typeof parsed).toBe("object");
       expect(Array.isArray(parsed)).toBe(false);
     });
+
+    it("member JSON includes signature and parameters keys", async () => {
+      const result = await runWithCache(["--format", "json", "mathlib", "add"]);
+      const parsed = JSON.parse(result.stdout);
+      expect(parsed).toHaveProperty("name");
+      expect(parsed).toHaveProperty("kind");
+      expect(parsed).toHaveProperty("signature");
+      expect(parsed).toHaveProperty("parameters");
+      expect(parsed.name).toBe("add");
+      expect(parsed.kind).toBe("function");
+    });
+
+    it("package JSON includes members and guides arrays", async () => {
+      const result = await runWithCache(["--format", "json", "mathlib"]);
+      const parsed = JSON.parse(result.stdout);
+      expect(Array.isArray(parsed.members)).toBe(true);
+      expect(Array.isArray(parsed.guides)).toBe(true);
+    });
+
+    it("search JSON has results key", async () => {
+      const result = await runWithCache(["--format", "json", "search", "add"]);
+      const parsed = JSON.parse(result.stdout);
+      expect(parsed).toHaveProperty("results");
+      expect(Array.isArray(parsed.results)).toBe(true);
+    });
+
+    it("list JSON is array of member objects", async () => {
+      const result = await runWithCache(["--format", "json", "mathlib", "list"]);
+      const parsed = JSON.parse(result.stdout);
+      expect(Array.isArray(parsed)).toBe(true);
+      expect(parsed.length).toBeGreaterThan(0);
+      expect(parsed[0]).toHaveProperty("name");
+      expect(parsed[0]).toHaveProperty("kind");
+    });
   });
 
   describe("--format markdown", () => {
@@ -119,6 +157,56 @@ describe("Output Format Options", () => {
       expect(result.stdout).toContain("|");
     });
 
+    it("formats list command in markdown", async () => {
+      const result = await runWithCache(["--format", "markdown", "mathlib", "list"]);
+      expect(result.exitCode).toBe(0);
+      expect(result.stdout).toContain("#");
+    });
+
+    it("formats guides in markdown", async () => {
+      const result = await runWithCache(["--format", "markdown", "acme-api", "guides"]);
+      expect(result.exitCode).toBe(0);
+    });
+
+    it("formats guide in markdown", async () => {
+      const result = await runWithCache(["--format", "markdown", "acme-api", "guide", "quickstart"]);
+      expect(result.exitCode).toBe(0);
+      expect(result.stdout).toContain("#");
+    });
+
+    it("formats search results in markdown", async () => {
+      const result = await runWithCache(["--format", "markdown", "search", "add"]);
+      expect(result.exitCode).toBe(0);
+    });
+
+    it("formats tags in markdown", async () => {
+      const result = await runWithCache(["--format", "markdown", "acme-api", "tags"]);
+      expect(result.exitCode).toBe(0);
+    });
+
+    it("formats package list in markdown", async () => {
+      const result = await runWithCache(["--format", "markdown"]);
+      expect(result.exitCode).toBe(0);
+    });
+
+    it("formats type in markdown", async () => {
+      const result = await runCLI(["--format", "markdown", "acme-api", "type", "User"], { env: { LRN_CACHE: cacheDir } });
+      expect(result.exitCode).toBe(0);
+      expect(result.stdout).toContain("Type:");
+    });
+
+    it("formats guide section in markdown", async () => {
+      const result = await runCLI(["--format", "markdown", "acme-api", "guide", "quickstart", "--full"], { env: { LRN_CACHE: cacheDir } });
+      expect(result.exitCode).toBe(0);
+      expect(result.stdout).toContain("##");
+    });
+
+    it("formats HTTP member in markdown", async () => {
+      const result = await runCLI(["--format", "markdown", "acme-api", "users.list"], { env: { LRN_CACHE: cacheDir } });
+      expect(result.exitCode).toBe(0);
+      expect(result.stdout).toContain("Endpoint:");
+    });
+
     it.todo("escapes special markdown characters in content");
   });
 
@@ -145,6 +233,47 @@ describe("Output Format Options", () => {
       const result = await runWithCache(["--format", "summary", "mathlib"]);
       // Should not contain full descriptions
       expect(result.stdout).not.toContain("Returns the sum");
+    });
+
+    it("formats member in summary", async () => {
+      const result = await runWithCache(["--format", "summary", "mathlib", "add"]);
+      expect(result.exitCode).toBe(0);
+      expect(result.stdout).toContain("add");
+    });
+
+    it("formats guides in summary", async () => {
+      const result = await runWithCache(["--format", "summary", "acme-api", "guides"]);
+      expect(result.exitCode).toBe(0);
+    });
+
+    it("formats guide in summary", async () => {
+      const result = await runWithCache(["--format", "summary", "acme-api", "guide", "quickstart"]);
+      expect(result.exitCode).toBe(0);
+    });
+
+    it("formats search results in summary", async () => {
+      const result = await runWithCache(["--format", "summary", "search", "add"]);
+      expect(result.exitCode).toBe(0);
+    });
+
+    it("formats tags in summary", async () => {
+      const result = await runWithCache(["--format", "summary", "acme-api", "tags"]);
+      expect(result.exitCode).toBe(0);
+    });
+
+    it("formats package list in summary", async () => {
+      const result = await runWithCache(["--format", "summary"]);
+      expect(result.exitCode).toBe(0);
+    });
+
+    it("formats type in summary", async () => {
+      const result = await runCLI(["--format", "summary", "acme-api", "type", "User"], { env: { LRN_CACHE: cacheDir } });
+      expect(result.exitCode).toBe(0);
+    });
+
+    it("formats guide section in summary", async () => {
+      const result = await runCLI(["--format", "summary", "acme-api", "guide", "quickstart"], { env: { LRN_CACHE: cacheDir } });
+      expect(result.exitCode).toBe(0);
     });
   });
 
@@ -209,10 +338,10 @@ describe("Output Format Options", () => {
   describe("automatic format detection", () => {
     it.todo("uses text format when stdout is a TTY");
 
-    it("uses json format when stdout is piped", async () => {
-      // In test environment, stdout is not a TTY, so it defaults to JSON
+    it("uses text format when stdout is piped", async () => {
+      // Non-TTY defaults to text (same as TTY) — JSON requires explicit --json
       const result = await runWithCache(["mathlib"]);
-      expect(() => JSON.parse(result.stdout)).not.toThrow();
+      expect(() => JSON.parse(result.stdout)).toThrow();
     });
 
     it("explicit --format flag overrides auto-detection", async () => {
@@ -221,8 +350,13 @@ describe("Output Format Options", () => {
       expect(() => JSON.parse(result.stdout)).toThrow();
     });
 
-    // TODO: Currently the TTY check overrides LRN_FORMAT - need to fix precedence
-    it.todo("LRN_FORMAT env var overrides auto-detection");
+    it("LRN_FORMAT env var overrides auto-detection", async () => {
+      const result = await runCLI(["mathlib"], {
+        env: { LRN_CACHE: cacheDir, LRN_FORMAT: "json" },
+      });
+      expect(result.exitCode).toBe(0);
+      expect(() => JSON.parse(result.stdout)).not.toThrow();
+    });
   });
 
   describe("format consistency", () => {
@@ -250,6 +384,13 @@ describe("Output Format Options", () => {
       }
     });
 
-    it.todo("format output is consistent across command types");
+    it("format output is consistent across command types", async () => {
+      const formats = ["text", "json", "markdown", "summary"] as const;
+      for (const fmt of formats) {
+        const result = await runWithCache(["--format", fmt, "mathlib", "add"]);
+        expect(result.exitCode).toBe(0);
+        expect(result.stdout.length).toBeGreaterThan(0);
+      }
+    });
   });
 });

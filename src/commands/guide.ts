@@ -13,7 +13,7 @@ import { loadPackage } from "../cache.js";
 import { GuideNotFoundError, SectionNotFoundError, findSimilar } from "../errors.js";
 import { format, getOutputFormat, type FormatOptions } from "../format/index.js";
 
-export function runGuide(args: ParsedArgs, config: ResolvedConfig): void {
+export function runGuide(args: ParsedArgs, config: ResolvedConfig): string {
   const packageName = args.package!;
   const version = args.packageVersion;
   const slugPath = args.positional[0];
@@ -54,9 +54,9 @@ export function runGuide(args: ParsedArgs, config: ResolvedConfig): void {
       const similar = findSimilar(fullPath, allSectionIds);
       throw new SectionNotFoundError(packageName, slug, fullPath, similar);
     }
-    console.log(format(section, options));
+    return format(section, options);
   } else {
-    console.log(format(guide, options));
+    return format(guide, options);
   }
 }
 

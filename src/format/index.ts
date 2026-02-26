@@ -36,6 +36,9 @@ export interface SearchResult {
   name: string;
   summary?: string;
   score: number;
+  tags?: string[];
+  kind?: string;
+  deprecated?: boolean;
 }
 
 export interface SearchResults {
@@ -61,6 +64,10 @@ export interface FormatOptions {
   packageName?: string;
   /** Current path (for context in output) */
   path?: string;
+  /** Show signatures instead of summaries in list view */
+  signatures?: boolean;
+  /** Extract a specific part of a member */
+  extraction?: "signature" | "examples" | "parameters";
 }
 
 /**
@@ -83,11 +90,6 @@ export function getOutputFormat(args: ParsedArgs, config: ResolvedConfig): Outpu
   // --summary shorthand
   if (args.flags.summary) {
     return "summary";
-  }
-
-  // Auto-detect: use JSON for pipes, text for TTY
-  if (!process.stdout.isTTY) {
-    return "json";
   }
 
   // Use config default

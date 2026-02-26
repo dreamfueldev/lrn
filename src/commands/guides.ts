@@ -9,7 +9,7 @@ import type { ResolvedConfig } from "../config.js";
 import { loadPackage } from "../cache.js";
 import { format, getOutputFormat, type FormatOptions } from "../format/index.js";
 
-export function runGuides(args: ParsedArgs, config: ResolvedConfig): void {
+export function runGuides(args: ParsedArgs, config: ResolvedConfig): string {
   const packageName = args.package!;
   const version = args.packageVersion;
 
@@ -22,10 +22,18 @@ export function runGuides(args: ParsedArgs, config: ResolvedConfig): void {
     packageName,
   };
 
-  if (pkg.guides.length === 0) {
-    console.log("No guides found.");
-    return;
+  let guides = pkg.guides;
+
+  if (args.options.tag && args.options.tag.length > 0) {
+    const tags = args.options.tag;
+    guides = guides.filter((g) =>
+      g.tags?.some((t) => tags.some((ft) => t.toLowerCase() === ft.toLowerCase()))
+    );
   }
 
-  console.log(format(pkg.guides, options));
+  if (guides.length === 0) {
+    return "No guides found.";
+  }
+
+  return format(guides, options);
 }

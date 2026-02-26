@@ -267,6 +267,29 @@ describe("Package Commands", () => {
       expect(arithmeticIndex).toBeLessThan(algebraIndex);
     });
 
-    it.todo("shows message when package has no tags");
+    it("shows message when package has no tags", async () => {
+      const packages = [
+        {
+          name: "no-tags-pkg",
+          version: "1.0.0",
+          source: { type: "custom" as const },
+          members: [
+            { name: "doStuff", kind: "function" as const, summary: "Does stuff" },
+          ],
+          guides: [],
+          schemas: {},
+        },
+      ];
+      const cache = createTestCache(packages);
+      try {
+        const result = await runCLI(["--format", "text", "no-tags-pkg", "tags"], {
+          env: { LRN_CACHE: cache.cacheDir },
+        });
+        expect(result.exitCode).toBe(0);
+        expect(result.stdout).toContain("No tags");
+      } finally {
+        cache.cleanup();
+      }
+    });
   });
 });

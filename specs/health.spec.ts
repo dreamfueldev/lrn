@@ -8,6 +8,7 @@ import { calculateScore, countIssuesBySeverity } from "../src/health/scoring.js"
 import { estimateTokens, estimateTotalTokens } from "../src/health/tokens.js";
 import { formatTextOutput } from "../src/health/output/text.js";
 import { formatJsonOutput } from "../src/health/output/json.js";
+import { runCLI } from "./fixtures/index.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const VALID_FIXTURE = join(__dirname, "fixtures/health/valid");
@@ -421,7 +422,7 @@ describe("Health Command", () => {
     describe("file discovery", () => {
       it("discovers all .md files in directory", () => {
         const files = discoverFiles(VALID_FIXTURE);
-        expect(files.length).toBe(4); // index.md, add.md, getting-started.md, Result.md
+        expect(files.length).toBe(6); // index.md, add.md, button.md, run.md, getting-started.md, Result.md
       });
 
       it("identifies file type from path (member, guide, schema)", () => {
@@ -445,6 +446,52 @@ describe("Health Command", () => {
         expect(paths.some((p) => p.includes("members/"))).toBe(true);
         expect(paths.some((p) => p.includes("guides/"))).toBe(true);
         expect(paths.some((p) => p.includes("types/"))).toBe(true);
+      });
+    });
+
+    describe("empty directory", () => {
+      it("returns perfect score for empty directory", async () => {
+        const emptyDir = require("node:fs").mkdtempSync(join(require("node:os").tmpdir(), "lrn-health-empty-"));
+        try {
+          const result = await runHealth(emptyDir);
+          expect(result.score.overall).toBe(100);
+          expect(result.issues).toHaveLength(0);
+          expect(result.files.total).toBe(0);
+          expect(result.tokens.total).toBe(0);
+        } finally {
+          require("node:fs").rmSync(emptyDir, { recursive: true, force: true });
+        }
+      });
+    });
+
+    describe("CLI command routing", () => {
+      it("runs health command via CLI", async () => {
+        const result = await runCLI(["health", VALID_FIXTURE]);
+        expect(result.exitCode).toBe(0);
+        expect(result.stdout).toContain("Score:");
+      });
+
+      it("returns exit code 1 for invalid fixture via CLI", async () => {
+        const result = await runCLI(["health", INVALID_FIXTURE]);
+        expect(result.exitCode).toBe(1);
+      });
+
+      it("fails with error when no path provided", async () => {
+        const result = await runCLI(["health"]);
+        expect(result.exitCode).toBe(1);
+        expect(result.stderr).toContain("Missing path");
+      });
+
+      it("fails with error for nonexistent path", async () => {
+        const result = await runCLI(["health", "/nonexistent/path"]);
+        expect(result.exitCode).toBe(1);
+        expect(result.stderr).toContain("not found");
+      });
+
+      it("supports --json flag via CLI", async () => {
+        const result = await runCLI(["health", VALID_FIXTURE, "--json"]);
+        expect(result.exitCode).toBe(0);
+        expect(() => JSON.parse(result.stdout)).not.toThrow();
       });
     });
 
@@ -475,6 +522,101 @@ describe("Health Command", () => {
         });
         expect(output).toContain("Errors:");
         expect(output).not.toContain("Warnings:");
+      });
+    });
+
+    describe("additional structure checks", () => {
+      it("reports S002 for member without H1", async () => {
+        const result = await runHealth(INVALID_FIXTURE);
+        const issues = result.issues.filter((i) => i.checkId === "S002");
+        expect(issues.length).toBeGreaterThan(0);
+        expect(issues[0]!.severity).toBe("error");
+      });
+
+      it("reports S003 for invalid Kind value", async () => {
+        const result = await runHealth(INVALID_FIXTURE);
+        const issues = result.issues.filter(
+          (i) => i.checkId === "S003" && i.message.includes("Invalid Kind")
+        );
+        expect(issues.length).toBeGreaterThan(0);
+      });
+
+      it("reports F003 for invalid HTTP method in endpoint", async () => {
+        const result = await runHealth(INVALID_FIXTURE);
+        const issues = result.issues.filter((i) => i.checkId === "F003");
+        expect(issues.length).toBeGreaterThan(0);
+      });
+
+      it("reports F005 for non-TypeScript signature block", async () => {
+        const result = await runHealth(INVALID_FIXTURE);
+        const issues = result.issues.filter((i) => i.checkId === "F005");
+        expect(issues.length).toBeGreaterThan(0);
+      });
+
+      it("reports S005 for invalid guide Type value", async () => {
+        const result = await runHealth(INVALID_FIXTURE);
+        const issues = result.issues.filter(
+          (i) => i.checkId === "S005" && i.message.includes("Invalid")
+        );
+        expect(issues.length).toBeGreaterThan(0);
+      });
+
+      it("reports S006 for schema without H1", async () => {
+        const result = await runHealth(INVALID_FIXTURE);
+        const issues = result.issues.filter((i) => i.checkId === "S006");
+        expect(issues.length).toBeGreaterThan(0);
+      });
+
+      it("accepts component as valid Kind", async () => {
+        const result = await runHealth(VALID_FIXTURE);
+        const s003Issues = result.issues.filter(
+          (i) => i.checkId === "S003" && i.file.includes("button.md")
+        );
+        expect(s003Issues.length).toBe(0);
+      });
+
+      it("accepts command as valid Kind", async () => {
+        const result = await runHealth(VALID_FIXTURE);
+        const s003Issues = result.issues.filter(
+          (i) => i.checkId === "S003" && i.file.includes("run.md")
+        );
+        expect(s003Issues.length).toBe(0);
+      });
+
+      it("F005 does not flag HTML signature on component member", async () => {
+        const result = await runHealth(VALID_FIXTURE);
+        const f005Issues = result.issues.filter(
+          (i) => i.checkId === "F005" && i.file.includes("button.md")
+        );
+        expect(f005Issues.length).toBe(0);
+      });
+
+      it("F005 does not flag bash signature on command member", async () => {
+        const result = await runHealth(VALID_FIXTURE);
+        const f005Issues = result.issues.filter(
+          (i) => i.checkId === "F005" && i.file.includes("run.md")
+        );
+        expect(f005Issues.length).toBe(0);
+      });
+
+      it("reports C002 for member with summary but no description", async () => {
+        const result = await runHealth(INVALID_FIXTURE);
+        const issues = result.issues.filter((i) => i.checkId === "C002");
+        expect(issues.length).toBeGreaterThan(0);
+      });
+
+      it("reports C005 for Examples section without code blocks", async () => {
+        const result = await runHealth(INVALID_FIXTURE);
+        const issues = result.issues.filter(
+          (i) => i.checkId === "C005" && i.message.includes("no code blocks")
+        );
+        expect(issues.length).toBeGreaterThan(0);
+      });
+
+      it("reports C006 for guide without summary", async () => {
+        const result = await runHealth(INVALID_FIXTURE);
+        const issues = result.issues.filter((i) => i.checkId === "C006");
+        expect(issues.length).toBeGreaterThan(0);
       });
     });
   });

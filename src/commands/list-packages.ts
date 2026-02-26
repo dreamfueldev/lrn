@@ -9,12 +9,11 @@ import type { ResolvedConfig } from "../config.js";
 import { listCachedPackages, loadPackage } from "../cache.js";
 import { format, getOutputFormat, type FormatOptions } from "../format/index.js";
 
-export function runListPackages(args: ParsedArgs, config: ResolvedConfig): void {
+export function runListPackages(args: ParsedArgs, config: ResolvedConfig): string {
   const cachedPackages = listCachedPackages(config);
 
   if (cachedPackages.length === 0) {
-    console.log("No packages found. Use `lrn add <package>` to add packages.");
-    return;
+    return "No packages found. Use `lrn add <package>` to add packages.";
   }
 
   // Load full package data for display
@@ -26,5 +25,5 @@ export function runListPackages(args: ParsedArgs, config: ResolvedConfig): void 
     full: args.flags.full,
   };
 
-  console.log(format(packages, options));
+  return format(packages, options);
 }

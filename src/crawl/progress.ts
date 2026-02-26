@@ -106,6 +106,7 @@ export class ProgressReporter {
    * Report dry-run mode
    */
   dryRun(urls: string[]): void {
+    if (this.quiet) return;
     this.log("\nDry run - would fetch:");
     for (const url of urls) {
       this.log(`  ${url}`);
@@ -154,13 +155,14 @@ export class ProgressReporter {
    */
   private log(message: string): void {
     this.clearLine();
-    console.log(message);
+    process.stderr.write(message + "\n");
   }
 
   /**
    * Print the completion summary
    */
   summary(outputDir: string): void {
+    if (this.quiet) return;
     this.clearLine();
 
     const elapsed = ((Date.now() - this.startTime) / 1000).toFixed(1);

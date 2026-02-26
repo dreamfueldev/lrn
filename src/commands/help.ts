@@ -14,6 +14,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
  * Get package version from package.json
  */
 export function getVersion(): string {
+  if (process.env.LRN_VERSION) return process.env.LRN_VERSION;
   try {
     // Try multiple locations since we might be running from src or dist
     const possiblePaths = [
@@ -24,7 +25,7 @@ export function getVersion(): string {
     for (const pkgPath of possiblePaths) {
       try {
         const pkg = JSON.parse(readFileSync(pkgPath, "utf-8"));
-        if (pkg.name === "@lrn/cli" && pkg.version) {
+        if (pkg.name === "lrn" && pkg.version) {
           return pkg.version;
         }
       } catch {
@@ -38,17 +39,17 @@ export function getVersion(): string {
 }
 
 /**
- * Print version and exit
+ * Return version string
  */
-export function printVersion(): void {
-  console.log(getVersion());
+export function printVersion(): string {
+  return getVersion();
 }
 
 /**
- * Print main help message
+ * Return main help message
  */
-export function printHelp(): void {
-  console.log(`
+export function printHelp(): string {
+  return `
 lrn - learn and query programming interfaces
 
 Usage: lrn [command] [options]
@@ -62,11 +63,19 @@ Discovery Commands:
   remove <package>    Remove a package from the local cache
   versions <package>  List available versions for a package
   crawl <url>         Crawl documentation from a URL
+  teach               Generate agent orientation and strategy
+
+Registry Commands:
+  login               Log in to the lrn registry via GitHub
+  logout              Log out and remove stored credentials
+  status              Show current login status
+  pull <package>      Download a package from the registry
 
 Authoring Commands:
   parse <directory>           Parse markdown directory to IR JSON
   format <file> --out <dir>   Format IR JSON to markdown directory
   health <path>               Validate lrn-compatible markdown
+  llms-full <directory>        Generate llms-full.txt from markdown
 
 Package Commands:
   <package>                   Show package overview
@@ -78,6 +87,7 @@ Package Commands:
 
 Member Commands:
   <package> <member.path>               Show member details
+  <package> <A>,<B>,<C>                 Show multiple members at once
   <package> <member.path> --summary     Show only summary
   <package> <member.path> --signature   Show only signature
   <package> <member.path> --examples    Show only examples
@@ -103,8 +113,10 @@ Options:
 
 Filtering:
   --tag <tag>         Filter by tag (can be used multiple times)
-  --kind <kind>       Filter by kind: function, method, class, namespace, etc.
+  --kind <kind>       Filter by kind: function, method, class, namespace, constant, type, property, component, command, resource
   --deprecated        Include deprecated members
+  --signatures        Show member signatures instead of summaries
+  --with-guides       Append guide list to list output
 
 Configuration:
   --config <path>     Use specific config file
@@ -125,9 +137,10 @@ Examples:
   lrn stripe guide webhooks     Show webhooks guide
   lrn search "authentication"   Search all packages
   lrn stripe list --json        Output as JSON
+  lrn stripe list --signatures  Show signatures instead of summaries
+  lrn stripe charges.create,customers.list  Show multiple members
 
-Version: ${getVersion()}
-`);
+Version: ${getVersion()}`;
 }
 
 /**
@@ -139,45 +152,56 @@ lrn sync - Sync packages for project dependencies
 
 Usage: lrn sync [options]
 
-Reads package specifications from lrn.config.json or package.json
-and downloads documentation from the registry.
+Pulls all packages listed in project config that are missing or outdated.
+Reads from lrn.config.json or the "lrn" key in package.json.
+
+Local path entries are verified, registry entries are pulled if missing.
 
 Options:
+  --force             Re-download even if cached
   --config <path>     Use specific config file
   --registry <url>    Override registry URL
   --quiet, -q         Suppress progress output
 
 Examples:
-  lrn sync                          Sync from lrn.config.json
+  lrn sync                            Sync all configured packages
+  lrn sync --force                    Force re-download everything
   lrn sync --config ./my-config.json  Use custom config
 `,
 
   add: `
-lrn add - Add a package to the local cache
+lrn add - Add a package to the project config
 
 Usage: lrn add <package>[@<version>] [options]
 
-Downloads package documentation and adds it to lrn.config.json.
+Adds a package entry to the project config and pulls it from the registry.
+Supports local file paths and remote URLs as alternatives to the registry.
 
 Arguments:
   <package>           Package name (e.g., stripe, react)
   @<version>          Optional version (semver range supported)
 
 Options:
-  --registry <url>    Override registry URL
+  --path <file>              Use a local .lrn.json file
+  --url <url>                Use a remote URL
+  --save-to-package-json     Write to package.json "lrn" key instead of lrn.config.json
+  --registry <url>           Override registry URL
 
 Examples:
-  lrn add stripe                    Add latest version
-  lrn add stripe@2024.1.0           Add specific version
-  lrn add stripe@^2024.0.0          Add semver range
+  lrn add stripe                                        Add latest from registry
+  lrn add stripe@2024.1.0                               Add specific version
+  lrn add internal-sdk --path ./docs/sdk.lrn.json       Add from local file
+  lrn add custom-api --url https://example.com/api.json Add from URL
+  lrn add react --save-to-package-json                  Write to package.json
 `,
 
   remove: `
-lrn remove - Remove a package from the local cache
+lrn remove - Remove a package from the project config
 
-Usage: lrn remove <package> [options]
+Usage: lrn remove <package>
 
-Removes package documentation from cache and lrn.config.json.
+Removes a package entry from the project config file.
+Does NOT delete cached data (use 'lrn cache clean' for that).
 
 Arguments:
   <package>           Package name to remove
@@ -218,10 +242,12 @@ Options:
   --format <format>   Output format: text, json, markdown, summary
   --tag <tag>         Filter by tag
   --kind <kind>       Filter by kind
+  --deprecated        Include deprecated members
 
 Examples:
   lrn search "authentication"       Search all packages
   lrn stripe search "charge"        Search within Stripe
+  lrn search "auth" --tag security  Search with tag filter
 `,
 
   list: `
@@ -233,6 +259,8 @@ Lists all top-level members in a package.
 
 Options:
   --deep              List all members recursively
+  --signatures        Show member signatures instead of summaries
+  --with-guides       Append guide list to output
   --format <format>   Output format: text, json, markdown, summary
   --tag <tag>         Filter by tag
   --kind <kind>       Filter by kind
@@ -241,7 +269,25 @@ Options:
 Examples:
   lrn stripe list
   lrn stripe list --deep
+  lrn stripe list --deep --signatures
+  lrn stripe list --with-guides
   lrn stripe list --tag payments --json
+`,
+
+  guides: `
+lrn <package> guides - List package guides
+
+Usage: lrn <package> guides [options]
+
+Lists all guides in a package.
+
+Options:
+  --format <format>   Output format: text, json, markdown, summary
+  --tag <tag>         Filter by tag
+
+Examples:
+  lrn stripe guides
+  lrn stripe guides --tag auth
 `,
 
   guide: `
@@ -423,26 +469,130 @@ Examples:
   lrn health ./docs --errors          Only show errors
   lrn health ./docs --verbose         Show all issues
 `,
+
+  "llms-full": `
+lrn llms-full - Generate llms-full.txt from markdown
+
+Usage: lrn llms-full <directory> [options]
+
+Parses a markdown documentation directory and generates a single
+llms-full.txt file containing all documentation in a flat format
+suitable for LLM context injection.
+
+Arguments:
+  <directory>         Path to markdown documentation directory
+
+Options:
+  --out, -o <file>    Write output to file instead of stdout
+
+Examples:
+  lrn llms-full ./docs                          Output to stdout
+  lrn llms-full ./docs --out llms-full.txt      Write to file
+  lrn llms-full ./docs | wc -l                  Check line count
+`,
+
+  login: `
+lrn login - Log in to the lrn registry
+
+Usage: lrn login [options]
+
+Authenticates with the lrn registry using GitHub device flow.
+Opens your browser to complete authentication.
+
+Options:
+  --registry <url>    Override registry URL
+
+Examples:
+  lrn login
+`,
+
+  logout: `
+lrn logout - Log out of the lrn registry
+
+Usage: lrn logout
+
+Removes stored credentials from ~/.lrn/credentials.
+
+Examples:
+  lrn logout
+`,
+
+  status: `
+lrn status - Show current login status
+
+Usage: lrn status [options]
+
+Shows whether you are logged in, your username, and role.
+
+Options:
+  --registry <url>    Override registry URL
+
+Examples:
+  lrn status
+`,
+
+  teach: `
+lrn teach - Generate agent orientation and strategy
+
+Usage: lrn teach [options]
+
+Generates agent orientation including command reference, querying strategy,
+and per-package blurbs. Teaches LLMs how to use lrn effectively.
+
+Options:
+  --output <path>     Write to file (uses marker-based injection) or "stdout"
+  --packages <list>   Comma-separated list of package names to include
+
+Output uses <!-- LRN-START --> / <!-- LRN-END --> markers for idempotent
+file updates. Re-running replaces the previous content between markers.
+
+Examples:
+  lrn teach                              Print to stdout
+  lrn teach --output CLAUDE.md           Inject into CLAUDE.md
+  lrn teach --output AGENTS.md           Inject into AGENTS.md
+  lrn teach --packages stripe,react      Only include specific packages
+`,
+
+  pull: `
+lrn pull - Download a package from the registry
+
+Usage: lrn pull <package>[@<version>] [options]
+
+Downloads package documentation from the registry and caches it locally.
+
+Arguments:
+  <package>           Package name (e.g., stripe, react)
+  @<version>          Optional version (defaults to latest)
+
+Options:
+  --force             Re-download even if already cached
+  --registry <url>    Override registry URL
+
+Examples:
+  lrn pull stripe                     Pull latest version
+  lrn pull stripe@2024.1.0            Pull specific version
+  lrn pull stripe --force             Force re-download
+`,
 };
 
 /**
- * Print help for a specific command
+ * Return help for a specific command
  */
-export function printCommandHelp(command: string): void {
+export function printCommandHelp(command: string): { stdout?: string; stderr?: string } {
   const help = commandHelp[command];
   if (help) {
-    console.log(help);
+    return { stdout: help };
   } else {
-    console.error(`Unknown command: ${command}`);
-    console.error("Run 'lrn --help' for usage information.");
+    return { stderr: `Unknown command: ${command}\nRun 'lrn --help' for usage information.` };
   }
 }
 
 /**
- * Print error for unknown command
+ * Return error for unknown command
  */
-export function printUnknownCommand(command: string): void {
-  console.error(`Unknown command: ${command}`);
+export function printUnknownCommand(command: string): string {
+  const lines: string[] = [];
+  lines.push(`Unknown command: ${command}`);
 
   // Find similar commands
   const allCommands = [
@@ -461,22 +611,30 @@ export function printUnknownCommand(command: string): void {
     "format",
     "crawl",
     "health",
+    "llms-full",
+    "login",
+    "logout",
+    "status",
+    "pull",
+    "teach",
   ];
   const similar = allCommands.filter(
     (c) => c.includes(command) || command.includes(c)
   );
 
   if (similar.length > 0) {
-    console.error(`Did you mean: ${similar.join(", ")}?`);
+    lines.push(`Did you mean: ${similar.join(", ")}?`);
   }
 
-  console.error("\nRun 'lrn --help' for usage information.");
+  lines.push("");
+  lines.push("Run 'lrn --help' for usage information.");
+
+  return lines.join("\n");
 }
 
 /**
- * Print error for unknown option
+ * Return error for unknown option
  */
-export function printUnknownOption(option: string): void {
-  console.error(`Unknown option: ${option}`);
-  console.error("\nRun 'lrn --help' for usage information.");
+export function printUnknownOption(option: string): string {
+  return `Unknown option: ${option}\n\nRun 'lrn --help' for usage information.`;
 }

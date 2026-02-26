@@ -82,6 +82,14 @@ export function parseSchema(
     schema.enum = enumValues;
   }
 
+  // Fallback: extract inline union values if no structured enum found
+  if (!schema.enum) {
+    const inlineValues = parseInlineUnionValues(tokens);
+    if (inlineValues && inlineValues.length > 0) {
+      schema.enum = inlineValues;
+    }
+  }
+
   // Extract example from ## Example code block
   const exampleBlock = extractExampleBlock(tokens);
   if (exampleBlock) {
@@ -182,6 +190,8 @@ function parseSchemaType(
       return "array";
     case "null":
       return "null";
+    case "union":
+      return "string";
     default:
       return undefined;
   }
@@ -268,6 +278,53 @@ function parseEnumValues(tokens: Token[]): unknown[] | undefined {
   }
 
   return values.length > 0 ? values : undefined;
+}
+
+/**
+ * Parse inline union values from paragraph tokens before the first H2.
+ * Handles two patterns:
+ *   1. Pipe-separated code span: `"mse" | "crossEntropy" | "huber"`
+ *   2. "One of:" format: One of: `"cbc"`, `"gcm"`, `"ctr"`
+ */
+function parseInlineUnionValues(tokens: Token[]): unknown[] | undefined {
+  // Only scan tokens before the first H2 (intro area)
+  for (const token of tokens) {
+    if (token.type === "heading") {
+      const heading = token as { depth: number };
+      if (heading.depth === 2) break;
+    }
+
+    if (token.type === "paragraph") {
+      const raw = (token as { raw?: string }).raw || "";
+
+      // Pattern 1: `"val1" | "val2" | ...` (single code span with pipes)
+      const codeSpanMatch = raw.trim().match(/^`([^`]+)`\s*$/);
+      if (codeSpanMatch) {
+        const inner = codeSpanMatch[1]!;
+        if (inner.includes("|")) {
+          const values = inner.split("|").map(v => {
+            v = v.trim();
+            const qMatch = v.match(/^["'](.+)["']$/);
+            return qMatch ? qMatch[1]! : v;
+          }).filter(Boolean);
+          if (values.length > 0) return values;
+        }
+      }
+
+      // Pattern 2: One of: `"val1"`, `"val2"`, ...
+      const text = (token as { text?: string }).text || raw;
+      const oneOfMatch = text.match(/^One of:\s*(.+)/i);
+      if (oneOfMatch) {
+        const valuesStr = oneOfMatch[1]!;
+        const values = [...valuesStr.matchAll(/`"?([^"`]+)"?`/g)]
+          .map(m => m[1]!)
+          .filter(Boolean);
+        if (values.length > 0) return values;
+      }
+    }
+  }
+
+  return undefined;
 }
 
 /**

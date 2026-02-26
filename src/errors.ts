@@ -18,6 +18,8 @@ export const ExitCode = {
   NOT_FOUND: 3,
   /** Network error (registry unreachable) */
   NETWORK_ERROR: 4,
+  /** Authentication error */
+  AUTH_ERROR: 5,
 } as const;
 
 export type ExitCodeValue = (typeof ExitCode)[keyof typeof ExitCode];
@@ -28,16 +30,19 @@ export type ExitCodeValue = (typeof ExitCode)[keyof typeof ExitCode];
 export class CLIError extends Error {
   readonly exitCode: ExitCodeValue;
   readonly hint?: string;
+  readonly context?: Record<string, string>;
 
   constructor(
     message: string,
     exitCode: ExitCodeValue = ExitCode.GENERAL_ERROR,
-    hint?: string
+    hint?: string,
+    context?: Record<string, string>
   ) {
     super(message);
     this.name = "CLIError";
     this.exitCode = exitCode;
     this.hint = hint;
+    this.context = context;
   }
 }
 
@@ -52,7 +57,7 @@ export class PackageNotFoundError extends CLIError {
     const hint = suggestion
       ? `Did you mean: ${suggestion}?`
       : "Run 'lrn sync' to download packages or 'lrn' to list cached packages.";
-    super(message, ExitCode.PACKAGE_NOT_FOUND, hint);
+    super(message, ExitCode.PACKAGE_NOT_FOUND, hint, { package: packageName });
     this.name = "PackageNotFoundError";
     this.packageName = packageName;
   }
@@ -103,12 +108,18 @@ export class TypeNotFoundError extends CLIError {
   readonly packageName: string;
   readonly typeName: string;
 
-  constructor(packageName: string, typeName: string, suggestion?: string) {
+  constructor(packageName: string, typeName: string, suggestion?: string, referencedIn?: string[]) {
     const message = `Type not found: ${typeName}`;
-    const hint = suggestion
-      ? `Did you mean: ${suggestion}?`
-      : `Run 'lrn ${packageName} types' to see available types.`;
-    super(message, ExitCode.NOT_FOUND, hint);
+    const lines: string[] = [];
+    if (referencedIn && referencedIn.length > 0) {
+      lines.push(`Referenced as parameter type in: ${referencedIn.join(", ")}`);
+    }
+    if (suggestion) {
+      lines.push(`Did you mean: ${suggestion}?`);
+    } else {
+      lines.push(`Run 'lrn ${packageName} types' to see available types.`);
+    }
+    super(message, ExitCode.NOT_FOUND, lines.join("\n"));
     this.name = "TypeNotFoundError";
     this.packageName = packageName;
     this.typeName = typeName;
@@ -148,7 +159,12 @@ export class ConfigError extends CLIError {
   readonly configPath?: string;
 
   constructor(message: string, configPath?: string) {
-    super(message, ExitCode.GENERAL_ERROR);
+    super(
+      message,
+      ExitCode.GENERAL_ERROR,
+      "Check config file syntax. Run 'lrn --no-config' to bypass.",
+      configPath ? { config: configPath } : undefined
+    );
     this.name = "ConfigError";
     this.configPath = configPath;
   }
@@ -164,7 +180,8 @@ export class NetworkError extends CLIError {
     super(
       message,
       ExitCode.NETWORK_ERROR,
-      "Check your internet connection or try again later."
+      "Check your internet connection or try again later.",
+      url ? { url } : undefined
     );
     this.name = "NetworkError";
     this.url = url;
@@ -197,6 +214,53 @@ export class CrawlError extends CLIError {
 }
 
 /**
+ * Error for registry authentication failures (401)
+ */
+export class RegistryAuthError extends CLIError {
+  constructor(message: string = "Not logged in.") {
+    super(message, ExitCode.AUTH_ERROR, "Run 'lrn login' to authenticate.");
+    this.name = "RegistryAuthError";
+  }
+}
+
+/**
+ * Error for registry authorization failures (403)
+ */
+export class RegistryForbiddenError extends CLIError {
+  constructor(message: string = "Package downloads require admin access.") {
+    super(message, ExitCode.AUTH_ERROR, "Contact the lrn team.");
+    this.name = "RegistryForbiddenError";
+  }
+}
+
+/**
+ * Error for registry rate limiting (429)
+ */
+export class RegistryRateLimitError extends CLIError {
+  constructor(message: string = "Rate limit exceeded.") {
+    super(message, ExitCode.NETWORK_ERROR, "Try again later.");
+    this.name = "RegistryRateLimitError";
+  }
+}
+
+/**
+ * Error for checksum verification failures
+ */
+export class ChecksumError extends CLIError {
+  readonly packageName: string;
+
+  constructor(packageName: string) {
+    super(
+      `Checksum verification failed for ${packageName}.`,
+      ExitCode.GENERAL_ERROR,
+      "Try 'lrn pull --force'.",
+    );
+    this.name = "ChecksumError";
+    this.packageName = packageName;
+  }
+}
+
+/**
  * Format an error for display
  */
 export function formatError(error: CLIError, verbose: boolean = false): string {
@@ -204,6 +268,13 @@ export function formatError(error: CLIError, verbose: boolean = false): string {
 
   if (error.hint) {
     output += `\n${error.hint}`;
+  }
+
+  if (verbose && error.context && Object.keys(error.context).length > 0) {
+    output += "\n\nDebug:";
+    for (const [key, value] of Object.entries(error.context)) {
+      output += `\n  ${key}: ${value}`;
+    }
   }
 
   if (verbose && error.stack) {

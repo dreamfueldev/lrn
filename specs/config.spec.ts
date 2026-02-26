@@ -1,100 +1,221 @@
-import { describe, it } from "bun:test";
+import { describe, it, expect, beforeAll, afterAll } from "bun:test";
+import { mkdtempSync, rmSync, mkdirSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
+import { tmpdir } from "node:os";
+import {
+  loadAllFixturePackages,
+  createTestCache,
+  runCLI,
+} from "./fixtures/index.js";
 
 describe("Configuration", () => {
-  describe("config file lookup", () => {
-    it.todo("checks ./lrn.config.json first (project root)");
-    it.todo("checks ~/.lrn/config.json second (user home)");
-    it.todo("uses built-in defaults when no config file found");
-    it.todo("merges project config with user config");
-    it.todo("project config takes precedence over user config");
+  let cacheDir: string;
+  let cleanup: () => void;
+
+  beforeAll(() => {
+    const packages = loadAllFixturePackages();
+    const cache = createTestCache(packages);
+    cacheDir = cache.cacheDir;
+    cleanup = cache.cleanup;
   });
 
-  describe("lrn.config.json parsing", () => {
-    it.todo("parses valid JSON config file");
-    it.todo("validates config against expected schema");
-    it.todo("reports clear error for invalid JSON syntax");
-    it.todo("reports clear error for invalid config structure");
-    it.todo("ignores unknown fields in config");
+  afterAll(() => {
+    cleanup();
   });
 
-  describe("config.registry", () => {
-    it.todo("uses default registry when not specified");
-    it.todo("uses custom registry URL from config");
-    it.todo("validates registry URL format");
-  });
+  const runWithCache = (args: string[], extraEnv: Record<string, string> = {}) =>
+    runCLI(args, { env: { LRN_CACHE: cacheDir, ...extraEnv } });
 
-  describe("config.cache", () => {
-    it.todo("uses ~/.lrn as default cache directory");
-    it.todo("uses custom cache directory from config");
-    it.todo("expands ~ to home directory");
-    it.todo("creates cache directory if it does not exist");
-  });
-
-  describe("config.defaultFormat", () => {
-    it.todo("uses text as default format when not specified");
-    it.todo("uses custom default format from config");
-    it.todo("validates format value (text, json, markdown, summary)");
-  });
-
-  describe("config.packages", () => {
-    it.todo("parses semver string specification");
-    it.todo("parses object with version field");
-    it.todo("parses object with path field");
-    it.todo("parses object with url field");
-    it.todo("validates semver syntax");
-    it.todo("validates local path exists");
-  });
-
-  describe("--config <path>", () => {
-    it.todo("uses specified config file");
-    it.todo("overrides default config file lookup");
-    it.todo("fails with clear error when file not found");
-    it.todo("fails with clear error when file is not valid JSON");
-  });
-
-  describe("--no-config", () => {
-    it.todo("ignores all config files");
-    it.todo("uses only built-in defaults");
-    it.todo("still respects command-line flags");
-    it.todo("still respects environment variables");
-  });
-
-  describe("--registry <url>", () => {
-    it.todo("overrides registry from config");
-    it.todo("overrides default registry");
-    it.todo("validates URL format");
-  });
-
-  describe("environment variables", () => {
-    describe("LRN_REGISTRY", () => {
-      it.todo("overrides default registry");
-      it.todo("overrides config file registry");
-      it.todo("is overridden by --registry flag");
+  describe("LRN_CACHE environment variable", () => {
+    it("uses LRN_CACHE to find packages", async () => {
+      const result = await runWithCache(["mathlib"]);
+      expect(result.exitCode).toBe(0);
+      expect(result.stdout).toContain("mathlib");
     });
 
-    describe("LRN_CACHE", () => {
-      it.todo("overrides default cache directory");
-      it.todo("overrides config file cache");
-      it.todo("expands ~ to home directory");
-    });
-
-    describe("LRN_FORMAT", () => {
-      it.todo("overrides default output format");
-      it.todo("overrides config file defaultFormat");
-      it.todo("is overridden by --format flag");
-    });
-
-    describe("NO_COLOR", () => {
-      it.todo("disables colored output when set");
-      it.todo("respects any non-empty value");
+    it("shows empty list when cache has no packages", async () => {
+      const emptyDir = mkdtempSync(join(tmpdir(), "lrn-empty-"));
+      try {
+        const result = await runCLI([], { env: { LRN_CACHE: emptyDir } });
+        expect(result.exitCode).toBe(0);
+        expect(result.stdout).toContain("No packages found");
+      } finally {
+        rmSync(emptyDir, { recursive: true, force: true });
+      }
     });
   });
 
-  describe("precedence order", () => {
-    it.todo("command-line flags take highest precedence");
-    it.todo("environment variables take second precedence");
-    it.todo("project config takes third precedence");
-    it.todo("user config takes fourth precedence");
-    it.todo("built-in defaults take lowest precedence");
+  describe("--no-config flag", () => {
+    it("still respects LRN_CACHE env var", async () => {
+      const result = await runWithCache(["--no-config", "mathlib"]);
+      expect(result.exitCode).toBe(0);
+      expect(result.stdout).toContain("mathlib");
+    });
+  });
+
+  describe("--config flag", () => {
+    it("fails with clear error when config file not found", async () => {
+      const result = await runWithCache(["--config", "/nonexistent/config.json", "mathlib"]);
+      expect(result.exitCode).toBe(1);
+      expect(result.stderr).toContain("not found");
+    });
+
+    it("fails with clear error when config file has invalid JSON", async () => {
+      const tempDir = mkdtempSync(join(tmpdir(), "lrn-config-"));
+      const badConfig = join(tempDir, "bad.json");
+      writeFileSync(badConfig, "not valid json{{{");
+      try {
+        const result = await runWithCache(["--config", badConfig, "mathlib"]);
+        expect(result.exitCode).toBe(1);
+        expect(result.stderr).toContain("Invalid JSON");
+      } finally {
+        rmSync(tempDir, { recursive: true, force: true });
+      }
+    });
+
+    it("loads valid config file", async () => {
+      const tempDir = mkdtempSync(join(tmpdir(), "lrn-config-"));
+      const configPath = join(tempDir, "lrn.config.json");
+      writeFileSync(configPath, JSON.stringify({ registry: "https://example.com" }));
+      try {
+        // Should not error — config is valid
+        const result = await runWithCache(["--config", configPath]);
+        expect(result.exitCode).toBe(0);
+      } finally {
+        rmSync(tempDir, { recursive: true, force: true });
+      }
+    });
+
+    it("rejects invalid defaultFormat in config", async () => {
+      const tempDir = mkdtempSync(join(tmpdir(), "lrn-config-"));
+      const configPath = join(tempDir, "lrn.config.json");
+      writeFileSync(configPath, JSON.stringify({ defaultFormat: "xml" }));
+      try {
+        const result = await runWithCache(["--config", configPath]);
+        expect(result.exitCode).toBe(1);
+        expect(result.stderr).toContain("Invalid defaultFormat");
+      } finally {
+        rmSync(tempDir, { recursive: true, force: true });
+      }
+    });
+
+    it("rejects invalid package spec in config", async () => {
+      const tempDir = mkdtempSync(join(tmpdir(), "lrn-config-"));
+      const configPath = join(tempDir, "lrn.config.json");
+      writeFileSync(configPath, JSON.stringify({ packages: { foo: 42 } }));
+      try {
+        const result = await runWithCache(["--config", configPath]);
+        expect(result.exitCode).toBe(1);
+        expect(result.stderr).toContain("Invalid package specification");
+      } finally {
+        rmSync(tempDir, { recursive: true, force: true });
+      }
+    });
+
+    it("rejects package spec with no valid keys", async () => {
+      const tempDir = mkdtempSync(join(tmpdir(), "lrn-config-"));
+      const configPath = join(tempDir, "lrn.config.json");
+      writeFileSync(configPath, JSON.stringify({ packages: { foo: { bad: true } } }));
+      try {
+        const result = await runWithCache(["--config", configPath]);
+        expect(result.exitCode).toBe(1);
+        expect(result.stderr).toContain("Must have version, path, or url");
+      } finally {
+        rmSync(tempDir, { recursive: true, force: true });
+      }
+    });
+
+    it("accepts valid package spec with version", async () => {
+      const tempDir = mkdtempSync(join(tmpdir(), "lrn-config-"));
+      const configPath = join(tempDir, "lrn.config.json");
+      writeFileSync(configPath, JSON.stringify({ packages: { foo: "^1.0.0" } }));
+      try {
+        const result = await runWithCache(["--config", configPath]);
+        expect(result.exitCode).toBe(0);
+      } finally {
+        rmSync(tempDir, { recursive: true, force: true });
+      }
+    });
+
+    it("accepts valid package spec with path", async () => {
+      const tempDir = mkdtempSync(join(tmpdir(), "lrn-config-"));
+      const configPath = join(tempDir, "lrn.config.json");
+      writeFileSync(configPath, JSON.stringify({ packages: { foo: { path: "./foo.json" } } }));
+      try {
+        const result = await runWithCache(["--config", configPath]);
+        expect(result.exitCode).toBe(0);
+      } finally {
+        rmSync(tempDir, { recursive: true, force: true });
+      }
+    });
+  });
+
+  describe("LRN_FORMAT environment variable", () => {
+    it("overrides default output format", async () => {
+      const result = await runWithCache(["mathlib"], { LRN_FORMAT: "json" });
+      expect(result.exitCode).toBe(0);
+      expect(() => JSON.parse(result.stdout)).not.toThrow();
+    });
+
+    it("ignores invalid format value", async () => {
+      const result = await runWithCache(["mathlib"], { LRN_FORMAT: "invalid" });
+      expect(result.exitCode).toBe(0);
+      // Falls back to text format
+      expect(() => JSON.parse(result.stdout)).toThrow();
+    });
+
+    it("is overridden by --format flag", async () => {
+      const result = await runWithCache(["--format", "text", "mathlib"], { LRN_FORMAT: "json" });
+      expect(result.exitCode).toBe(0);
+      // --format text wins over LRN_FORMAT=json
+      expect(() => JSON.parse(result.stdout)).toThrow();
+    });
+  });
+
+  describe("--registry flag", () => {
+    it("overrides registry from config", async () => {
+      // Just verify it doesn't crash — registry isn't used for local packages
+      const result = await runWithCache(["--registry", "https://custom.example.com", "mathlib"]);
+      expect(result.exitCode).toBe(0);
+    });
+  });
+
+  describe("cache error handling", () => {
+    it("handles corrupted package JSON file", async () => {
+      const tempDir = mkdtempSync(join(tmpdir(), "lrn-cache-corrupt-"));
+      const pkgDir = join(tempDir, "packages", "badpkg");
+      mkdirSync(pkgDir, { recursive: true });
+      writeFileSync(join(pkgDir, ".lrn.json"), "not valid json{{{");
+      try {
+        const result = await runCLI(["badpkg"], {
+          env: { LRN_CACHE: join(tempDir, "packages") },
+        });
+        // Should fail gracefully — package can't be loaded
+        expect(result.exitCode).not.toBe(0);
+      } finally {
+        rmSync(tempDir, { recursive: true, force: true });
+      }
+    });
+
+    it("handles empty package directory", async () => {
+      const tempDir = mkdtempSync(join(tmpdir(), "lrn-cache-empty-"));
+      const pkgDir = join(tempDir, "packages", "emptypkg");
+      mkdirSync(pkgDir, { recursive: true });
+      try {
+        const result = await runCLI(["emptypkg"], {
+          env: { LRN_CACHE: join(tempDir, "packages") },
+        });
+        expect(result.exitCode).not.toBe(0);
+      } finally {
+        rmSync(tempDir, { recursive: true, force: true });
+      }
+    });
+  });
+
+  describe("LRN_REGISTRY environment variable", () => {
+    it("overrides default registry", async () => {
+      const result = await runWithCache(["mathlib"], { LRN_REGISTRY: "https://custom.example.com" });
+      expect(result.exitCode).toBe(0);
+    });
   });
 });

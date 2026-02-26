@@ -31,7 +31,7 @@ export class CrawlQueue {
   /**
    * Add a URL to the queue
    */
-  add(url: string, depth: number, parent?: string): boolean {
+  add(url: string, parent?: string): boolean {
     const normalized = normalizeUrl(url);
 
     // Skip if already visited or queued
@@ -44,7 +44,6 @@ export class CrawlQueue {
 
     this.queue.push({
       url: normalized,
-      depth,
       parent,
       retries: 0,
     });
@@ -55,10 +54,10 @@ export class CrawlQueue {
   /**
    * Add multiple URLs to the queue
    */
-  addAll(urls: string[], depth: number, parent?: string): number {
+  addAll(urls: string[], parent?: string): number {
     let added = 0;
     for (const url of urls) {
-      if (this.add(url, depth, parent)) {
+      if (this.add(url, parent)) {
         added++;
       }
     }

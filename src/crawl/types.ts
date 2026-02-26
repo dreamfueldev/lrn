@@ -11,9 +11,6 @@ export interface CrawlOptions {
   /** Starting URL to crawl */
   url: string;
 
-  /** Maximum depth for link following (default: 1) */
-  depth: number;
-
   /** Requests per second (default: 2) */
   rate: number;
 
@@ -69,8 +66,8 @@ export interface CrawlMetadata {
   /** When the crawl started */
   crawledAt: string;
 
-  /** Whether llms.txt was detected */
-  llmsTxt: boolean;
+  /** How the crawl URLs were discovered */
+  source: 'llms-txt' | 'llms-full' | 'sitemap';
 
   /** Total number of pages crawled */
   pages: number;
@@ -148,9 +145,6 @@ export interface QueueItem {
   /** URL to fetch */
   url: string;
 
-  /** Current depth in the crawl tree */
-  depth: number;
-
   /** Parent URL that linked to this */
   parent?: string;
 
@@ -170,12 +164,6 @@ export interface ProcessedPage {
 
   /** Title extracted from the page */
   title?: string;
-
-  /** Links found in the page */
-  links: string[];
-
-  /** Whether this came from llms.txt */
-  fromLlmsTxt: boolean;
 }
 
 /**

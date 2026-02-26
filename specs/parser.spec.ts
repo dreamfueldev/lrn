@@ -1,7 +1,8 @@
 import { describe, it, expect, beforeAll, afterAll } from "bun:test";
 import { mkdtempSync, rmSync, mkdirSync, writeFileSync, readFileSync, existsSync } from "node:fs";
-import { join } from "node:path";
+import { join, dirname } from "node:path";
 import { tmpdir } from "node:os";
+import { fileURLToPath } from "node:url";
 import {
   loadAllFixturePackages,
   loadFixturePackage,
@@ -174,6 +175,94 @@ This is the description paragraph.
 `;
         const member = parseMember(content, "test.md");
         expect(member.tags).toEqual(["math", "utility", "core"]);
+      });
+    });
+
+    describe("signatureLanguage parsing", () => {
+      it("captures signatureLanguage for HTML signature", () => {
+        const content = `# Button
+
+**Kind:** component
+
+\`\`\`html
+<button class="btn">{children}</button>
+\`\`\`
+`;
+        const member = parseMember(content, "Button.md");
+        expect(member.signatureLanguage).toBe("html");
+        expect(member.signature).toBe('<button class="btn">{children}</button>');
+      });
+
+      it("captures signatureLanguage for bash signature", () => {
+        const content = `# run
+
+**Kind:** command
+
+\`\`\`bash
+mycli run [OPTIONS] IMAGE
+\`\`\`
+`;
+        const member = parseMember(content, "run.md");
+        expect(member.signatureLanguage).toBe("bash");
+      });
+
+      it("captures signatureLanguage for hcl signature", () => {
+        const content = `# aws_lambda
+
+**Kind:** resource
+
+\`\`\`hcl
+resource "aws_lambda_function" "example" {}
+\`\`\`
+`;
+        const member = parseMember(content, "aws_lambda.md");
+        expect(member.signatureLanguage).toBe("hcl");
+      });
+
+      it("does not set signatureLanguage for typescript signature", () => {
+        const content = `# add
+
+**Kind:** function
+
+\`\`\`typescript
+(a: number, b: number) => number
+\`\`\`
+`;
+        const member = parseMember(content, "add.md");
+        expect(member.signatureLanguage).toBeUndefined();
+      });
+
+      it("does not set signatureLanguage for javascript signature", () => {
+        const content = `# init
+
+**Kind:** function
+
+\`\`\`javascript
+function init(config) {}
+\`\`\`
+`;
+        const member = parseMember(content, "init.md");
+        expect(member.signatureLanguage).toBeUndefined();
+      });
+    });
+
+    describe("new MemberKind parsing", () => {
+      it("parses component kind", () => {
+        const content = `# Button\n\n**Kind:** component\n`;
+        const member = parseMember(content, "Button.md");
+        expect(member.kind).toBe("component");
+      });
+
+      it("parses command kind", () => {
+        const content = `# run\n\n**Kind:** command\n`;
+        const member = parseMember(content, "run.md");
+        expect(member.kind).toBe("command");
+      });
+
+      it("parses resource kind", () => {
+        const content = `# aws_s3_bucket\n\n**Kind:** resource\n`;
+        const member = parseMember(content, "aws_s3_bucket.md");
+        expect(member.kind).toBe("resource");
       });
     });
 
@@ -749,6 +838,28 @@ Content here.
         expect(content).toContain("```");
       });
 
+      it("generates signature with signatureLanguage when set", () => {
+        const member: Member = {
+          name: "Button",
+          kind: "component",
+          signature: '<button class="btn">{children}</button>',
+          signatureLanguage: "html",
+        };
+        const content = formatMemberFile(member);
+        expect(content).toContain("```html");
+        expect(content).not.toContain("```typescript");
+      });
+
+      it("defaults to typescript when signatureLanguage not set", () => {
+        const member: Member = {
+          name: "add",
+          kind: "function",
+          signature: "(a: number) => number",
+        };
+        const content = formatMemberFile(member);
+        expect(content).toContain("```typescript");
+      });
+
       it("generates ## Parameters table", () => {
         const member: Member = {
           name: "test",
@@ -1062,6 +1173,53 @@ Content here.
         );
       });
 
+      it("round-trips signatureLanguage through format-dir and parse", async () => {
+        const original: Package = {
+          name: "roundtrip-sig",
+          source: { type: "markdown" },
+          members: [
+            {
+              name: "Button",
+              kind: "component",
+              summary: "A button",
+              signature: '<button class="btn">{children}</button>',
+              signatureLanguage: "html",
+            },
+            {
+              name: "run",
+              kind: "command",
+              summary: "Run it",
+              signature: "mycli run [OPTIONS]",
+              signatureLanguage: "bash",
+            },
+            {
+              name: "add",
+              kind: "function",
+              summary: "Add numbers",
+              signature: "(a: number) => number",
+            },
+          ],
+          guides: [],
+          schemas: {},
+        };
+
+        const outDir = join(tempDir, "roundtrip-sig");
+        formatPackageToDirectory(original, outDir);
+        const parsed = await parsePackage(outDir);
+
+        const button = parsed.members.find((m) => m.name === "Button");
+        expect(button?.signatureLanguage).toBe("html");
+        expect(button?.kind).toBe("component");
+
+        const run = parsed.members.find((m) => m.name === "run");
+        expect(run?.signatureLanguage).toBe("bash");
+        expect(run?.kind).toBe("command");
+
+        const add = parsed.members.find((m) => m.name === "add");
+        expect(add?.signatureLanguage).toBeUndefined();
+        expect(add?.kind).toBe("function");
+      });
+
       it("preserves parameter order", async () => {
         const original = loadFixturePackage("mathlib");
         const outDir = join(tempDir, "mathlib-params");
@@ -1075,6 +1233,85 @@ Content here.
         expect(parsedAdd?.parameters?.map((p) => p.name)).toEqual(
           originalAdd?.parameters?.map((p) => p.name)
         );
+      });
+    });
+
+    describe("advanced parser features", () => {
+      const advancedFixture = join(
+        dirname(fileURLToPath(import.meta.url)),
+        "fixtures/markdown/advanced-types"
+      );
+      const noIndexFixture = join(
+        dirname(fileURLToPath(import.meta.url)),
+        "fixtures/markdown/no-index"
+      );
+
+      it("applies lrn.json overrides", async () => {
+        const pkg = await parsePackage(advancedFixture);
+        expect(pkg.name).toBe("advanced-types-overridden");
+        expect(pkg.version).toBe("2.0.0");
+        expect(pkg.summary).toBe("Overridden summary from lrn.json");
+      });
+
+      it("creates synthetic namespace for dotted member without parent", async () => {
+        const pkg = await parsePackage(advancedFixture);
+        const config = pkg.members.find((m) => m.name === "Config");
+        expect(config).toBeDefined();
+        expect(config?.kind).toBe("namespace");
+        expect(config?.children?.length).toBe(1);
+        expect(config?.children?.[0]?.name).toBe("Controller");
+      });
+
+      it("parses guide with H3 nested sections", async () => {
+        const pkg = await parsePackage(advancedFixture);
+        const guide = pkg.guides.find((g) => g.slug === "nested-sections");
+        expect(guide).toBeDefined();
+        const startSection = guide?.sections.find(
+          (s) => s.title === "Getting Started"
+        );
+        expect(startSection?.sections?.length).toBe(2);
+        expect(startSection?.sections?.[0]?.title).toBe("Prerequisites");
+        expect(startSection?.sections?.[1]?.title).toBe("Installation");
+      });
+
+      it("parses guide See Also references", async () => {
+        const pkg = await parsePackage(advancedFixture);
+        const guide = pkg.guides.find((g) => g.slug === "references");
+        expect(guide?.see).toBeDefined();
+        expect(guide?.see?.length).toBe(4);
+        expect(guide?.see?.find((r) => r.type === "member")).toBeDefined();
+        expect(guide?.see?.find((r) => r.type === "guide")).toBeDefined();
+        expect(guide?.see?.find((r) => r.type === "schema")).toBeDefined();
+        expect(guide?.see?.find((r) => r.type === "url")).toBeDefined();
+      });
+
+      it("parses schema constraints", async () => {
+        const pkg = await parsePackage(advancedFixture);
+        const schema = pkg.schemas["ConstrainedString"];
+        expect(schema).toBeDefined();
+        expect(schema?.type).toBe("string");
+        expect(schema?.format).toBe("email");
+        expect(schema?.nullable).toBe(true);
+        expect(schema?.minimum).toBe(1);
+        expect(schema?.maximum).toBe(255);
+        expect(schema?.minLength).toBe(5);
+        expect(schema?.maxLength).toBe(100);
+        expect(schema?.default).toBe("user@example.com");
+        expect(schema?.pattern).toBe("^[a-zA-Z0-9]+@");
+      });
+
+      it("parses schema ## Values enum section", async () => {
+        const pkg = await parsePackage(advancedFixture);
+        const schema = pkg.schemas["StatusEnum"];
+        expect(schema).toBeDefined();
+        expect(schema?.enum).toEqual(["active", "inactive", "pending"]);
+      });
+
+      it("uses directory name when index.md missing", async () => {
+        const pkg = await parsePackage(noIndexFixture);
+        expect(pkg.name).toBe("no-index");
+        expect(pkg.members.length).toBe(1);
+        expect(pkg.members[0]?.name).toBe("func");
       });
     });
 
@@ -1131,6 +1368,19 @@ Content here.
         const content = readFileSync(outFile, "utf-8");
         const pkg = JSON.parse(content);
         expect(pkg.name).toBe("mathlib");
+      });
+
+      it("lrn parse fails when no directory given", async () => {
+        const result = await runCLI(["parse"]);
+        expect(result.exitCode).toBe(1);
+        expect(result.stderr).toContain("requires a directory");
+      });
+
+      it("lrn format without --out shows usage", async () => {
+        const fixturePath = getFixturePackagePath("mathlib");
+        const result = await runCLI(["format", fixturePath]);
+        expect(result.exitCode).toBe(1);
+        expect(result.stdout).toContain("Usage");
       });
     });
   });

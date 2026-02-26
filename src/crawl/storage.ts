@@ -81,7 +81,7 @@ export class CrawlStorage {
     this.metadata = {
       origin: new URL(url).origin,
       crawledAt: new Date().toISOString(),
-      llmsTxt: false,
+      source: 'llms-txt',
       pages: 0,
       urls: [],
     };
@@ -194,10 +194,10 @@ export class CrawlStorage {
   }
 
   /**
-   * Set whether llms.txt was detected
+   * Set the manifest source type
    */
-  setLlmsTxt(detected: boolean): void {
-    this.metadata.llmsTxt = detected;
+  setSource(source: 'llms-txt' | 'llms-full' | 'sitemap'): void {
+    this.metadata.source = source;
   }
 
   /**

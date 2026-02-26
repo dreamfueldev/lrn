@@ -52,11 +52,17 @@ export function parseMember(content: string, filename: string): Member {
   const http = endpointRaw ? parseEndpoint(endpointRaw) : undefined;
 
   // Extract signature from first typescript/javascript code block
+  // Try TS/JS first, then fall back to any code block (for html/bash/hcl signatures)
   const signatureBlock = extractCodeBlock(tokens, "typescript") ||
     extractCodeBlock(tokens, "javascript") ||
     extractCodeBlock(tokens, "ts") ||
     extractCodeBlock(tokens);
   const signature = signatureBlock?.code;
+
+  // Capture signature language when it's not TypeScript/JavaScript
+  const sigLang = signatureBlock?.language?.toLowerCase();
+  const isDefaultLang = !sigLang || ["typescript", "ts", "javascript", "js"].includes(sigLang);
+  const signatureLanguage = isDefaultLang ? undefined : signatureBlock?.language;
 
   // Extract description (text after signature, before first H2)
   const description = extractIntro(tokens);
@@ -96,6 +102,7 @@ export function parseMember(content: string, filename: string): Member {
   if (summary) member.summary = summary;
   if (description) member.description = description;
   if (signature) member.signature = signature;
+  if (signatureLanguage) member.signatureLanguage = signatureLanguage;
   if (parameters && parameters.length > 0) member.parameters = parameters;
   if (returns) member.returns = returns;
   if (examples && examples.length > 0) member.examples = examples;
@@ -134,6 +141,9 @@ function parseKind(raw: string | undefined): MemberKind {
     "constant",
     "type",
     "property",
+    "component",
+    "command",
+    "resource",
   ];
 
   for (const kind of validKinds) {

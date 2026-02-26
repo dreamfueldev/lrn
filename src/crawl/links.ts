@@ -1,62 +1,10 @@
 /**
- * Link Extraction
+ * URL Pattern Filtering
  *
- * Extracts links from markdown and filters by patterns.
+ * Filters URLs by include/exclude patterns for --include/--exclude support.
  */
 
 import micromatch from "micromatch";
-import { isSameOrigin, normalizeUrl } from "./fetcher.js";
-
-/**
- * Extract all links from markdown content
- */
-export function extractLinks(markdown: string, baseUrl: string): string[] {
-  const links: string[] = [];
-  const seen = new Set<string>();
-
-  // Match markdown links: [text](url)
-  const linkRegex = /\[([^\]]*)\]\(([^)]+)\)/g;
-  let match;
-
-  while ((match = linkRegex.exec(markdown)) !== null) {
-    const rawUrl = match[2]!.trim();
-
-    // Skip anchor links, mailto, tel, javascript, etc.
-    if (
-      rawUrl.startsWith("#") ||
-      rawUrl.startsWith("mailto:") ||
-      rawUrl.startsWith("tel:") ||
-      rawUrl.startsWith("javascript:")
-    ) {
-      continue;
-    }
-
-    try {
-      // Resolve relative URLs
-      const resolved = new URL(rawUrl, baseUrl).href;
-      const normalized = normalizeUrl(resolved);
-
-      // Skip duplicates
-      if (seen.has(normalized)) {
-        continue;
-      }
-      seen.add(normalized);
-
-      links.push(normalized);
-    } catch {
-      // Skip invalid URLs
-    }
-  }
-
-  return links;
-}
-
-/**
- * Filter links to only same-origin URLs
- */
-export function filterSameOrigin(links: string[], baseUrl: string): string[] {
-  return links.filter((link) => isSameOrigin(link, baseUrl));
-}
 
 /**
  * Filter links by include/exclude patterns
@@ -93,24 +41,6 @@ export function filterByPatterns(
 
     return true;
   });
-}
-
-/**
- * Filter and process links for crawling
- */
-export function processLinks(
-  links: string[],
-  baseUrl: string,
-  include: string[],
-  exclude: string[]
-): string[] {
-  // First filter to same origin
-  let filtered = filterSameOrigin(links, baseUrl);
-
-  // Then apply include/exclude patterns
-  filtered = filterByPatterns(filtered, include, exclude);
-
-  return filtered;
 }
 
 /**

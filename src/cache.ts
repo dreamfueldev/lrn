@@ -10,7 +10,7 @@ import { join, basename } from "node:path";
 import type { Package, PackageSpec } from "./schema/index.js";
 import type { ResolvedConfig } from "./config.js";
 import { getPackagesDir } from "./config.js";
-import { PackageNotFoundError, findSimilar } from "./errors.js";
+import { PackageNotFoundError, CLIError, ExitCode, findSimilar } from "./errors.js";
 
 /**
  * Information about a cached package
@@ -34,22 +34,42 @@ export function listCachedPackages(config: ResolvedConfig): CachedPackageInfo[] 
   const packages: CachedPackageInfo[] = [];
 
   try {
-    const dirs = readdirSync(packagesDir);
+    const topDirs = readdirSync(packagesDir);
 
-    for (const name of dirs) {
-      const pkgDir = join(packagesDir, name);
-      if (!statSync(pkgDir).isDirectory()) continue;
+    for (const entry of topDirs) {
+      const entryDir = join(packagesDir, entry);
+      if (!statSync(entryDir).isDirectory()) continue;
 
-      // Find version files
-      const files = readdirSync(pkgDir).filter((f) => f.endsWith(".lrn.json"));
+      const contents = readdirSync(entryDir);
+      const hasVersionFiles = contents.some((f) => f.endsWith(".lrn.json"));
 
-      for (const file of files) {
-        const version = basename(file, ".lrn.json");
-        packages.push({
-          name,
-          version,
-          path: join(pkgDir, file),
-        });
+      if (hasVersionFiles) {
+        // Single-level: packages/<name>/<version>.lrn.json
+        const files = contents.filter((f) => f.endsWith(".lrn.json"));
+        for (const file of files) {
+          const version = basename(file, ".lrn.json");
+          packages.push({
+            name: entry,
+            version,
+            path: join(entryDir, file),
+          });
+        }
+      } else {
+        // Two-level: packages/<domain>/<name>/<version>.lrn.json
+        for (const name of contents) {
+          const nameDir = join(entryDir, name);
+          if (!statSync(nameDir).isDirectory()) continue;
+
+          const files = readdirSync(nameDir).filter((f) => f.endsWith(".lrn.json"));
+          for (const file of files) {
+            const version = basename(file, ".lrn.json");
+            packages.push({
+              name: `${entry}/${name}`,
+              version,
+              path: join(nameDir, file),
+            });
+          }
+        }
       }
     }
   } catch {
@@ -145,6 +165,13 @@ export function loadPackageFromPath(path: string, expectedName?: string): Packag
 
     return pkg;
   } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "EACCES") {
+      throw new CLIError(
+        `Permission denied: cannot read ${path}`,
+        ExitCode.GENERAL_ERROR,
+        "Check file permissions or run with appropriate access."
+      );
+    }
     if (error instanceof SyntaxError) {
       throw new Error(`Invalid JSON in package file: ${path}`);
     }

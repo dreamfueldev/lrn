@@ -4,7 +4,7 @@
  * Markdown output for documentation and chat.
  */
 
-import type { Package, Member, Guide, Section, Schema } from "../schema/index.js";
+import type { Package, Member, Guide, Section, Schema, Example, Parameter } from "../schema/index.js";
 import type { FormattableData, FormatOptions, SearchResults, TagList } from "./index.js";
 
 /**
@@ -50,7 +50,7 @@ export function formatMarkdown(data: FormattableData, options: FormatOptions): s
     return formatSection(data as Section, options);
   }
 
-  if ("type" in data || "properties" in data || "$ref" in data) {
+  if ("type" in data || "properties" in data || "$ref" in data || "oneOf" in data || "allOf" in data) {
     return formatSchema(data as Schema, options);
   }
 
@@ -139,6 +139,18 @@ function formatMemberList(members: Member[], options: FormatOptions): string {
 }
 
 function formatMember(member: Member, options: FormatOptions): string {
+  // Extraction flags: return only the requested part
+  if (options.extraction === "signature") {
+    if (!member.signature) return "No signature available.";
+    return "```" + (member.signatureLanguage || "typescript") + "\n" + member.signature + "\n```";
+  }
+  if (options.extraction === "examples") {
+    return formatExamplesExtractionMd(member.examples);
+  }
+  if (options.extraction === "parameters") {
+    return formatParametersExtractionMd(member.parameters);
+  }
+
   const lines: string[] = [];
 
   // Header
@@ -157,12 +169,57 @@ function formatMember(member: Member, options: FormatOptions): string {
   if (member.http) {
     lines.push("");
     lines.push(`**Endpoint:** \`${member.http.method} ${member.http.path}\``);
+
+    // Path parameters
+    const pathParams = member.parameters?.filter(p => p.in === "path");
+    if (pathParams && pathParams.length > 0) {
+      lines.push("");
+      lines.push("### Path Parameters");
+      lines.push("");
+      lines.push("| Name | Type | Description |");
+      lines.push("|------|------|-------------|");
+      for (const param of pathParams) {
+        lines.push(`| \`{${param.name}}\` | ${param.type || "string"} | ${param.description || ""} |`);
+      }
+    }
+
+    // Query parameters
+    if (member.http.query && member.http.query.length > 0) {
+      lines.push("");
+      lines.push("### Query Parameters");
+      lines.push("");
+      lines.push("| Name | Type | Description | Default |");
+      lines.push("|------|------|-------------|---------|");
+      for (const param of member.http.query) {
+        const defaultVal = param.default !== undefined ? `\`${JSON.stringify(param.default)}\`` : "";
+        lines.push(`| \`${param.name}\` | ${param.type || "string"} | ${param.description || ""} | ${defaultVal} |`);
+      }
+    }
+
+    // Responses
+    if (member.http.responses) {
+      lines.push("");
+      lines.push("### Responses");
+      lines.push("");
+      lines.push("| Status | Description | Schema |");
+      lines.push("|--------|-------------|--------|");
+      for (const [status, response] of Object.entries(member.http.responses)) {
+        const schema = typeof response.schema === "string" ? `\`${response.schema}\`` : "";
+        lines.push(`| ${status} | ${response.description} | ${schema} |`);
+      }
+    }
+
+    // Scopes
+    if (member.http.scopes && member.http.scopes.length > 0) {
+      lines.push("");
+      lines.push(`**Scopes:** ${member.http.scopes.map(s => `\`${s}\``).join(", ")}`);
+    }
   }
 
   // Signature
   if (member.signature) {
     lines.push("");
-    lines.push("```typescript");
+    lines.push("```" + (member.signatureLanguage || "typescript"));
     lines.push(member.signature);
     lines.push("```");
   }
@@ -231,6 +288,52 @@ function formatMember(member: Member, options: FormatOptions): string {
     lines.push(`> ⚠️ **Deprecated:** ${member.deprecated}`);
   }
 
+  // Since version
+  if (member.since) {
+    lines.push("");
+    lines.push(`**Since:** ${member.since}`);
+  }
+
+  return lines.join("\n");
+}
+
+function formatExamplesExtractionMd(examples: Example[] | undefined): string {
+  if (!examples || examples.length === 0) {
+    return "No examples available.";
+  }
+  const lines: string[] = [];
+  for (const example of examples) {
+    if (lines.length > 0) lines.push("");
+    if (example.title) {
+      const lang = example.language ? ` (${example.language})` : "";
+      lines.push(`## ${example.title}${lang}`);
+      lines.push("");
+    }
+    if (example.description) {
+      lines.push(example.description);
+      lines.push("");
+    }
+    lines.push("```" + (example.language || ""));
+    lines.push(example.code);
+    lines.push("```");
+  }
+  return lines.join("\n");
+}
+
+function formatParametersExtractionMd(parameters: Parameter[] | undefined): string {
+  if (!parameters || parameters.length === 0) {
+    return "No parameters available.";
+  }
+  const lines: string[] = [];
+  lines.push("| Name | Type | Required | Description | Default |");
+  lines.push("|------|------|----------|-------------|---------|");
+  for (const param of parameters) {
+    const type = param.type || "-";
+    const required = param.required ? "✓" : "";
+    const desc = param.description || "";
+    const defaultVal = param.default !== undefined ? `\`${JSON.stringify(param.default)}\`` : "";
+    lines.push(`| \`${param.name}\` | ${type} | ${required} | ${desc} | ${defaultVal} |`);
+  }
   return lines.join("\n");
 }
 
@@ -310,9 +413,19 @@ function formatSection(section: Section, options: FormatOptions): string {
     }
   }
 
-  if (section.sections && options.full) {
-    for (const sub of section.sections) {
-      lines.push(formatSection(sub, options));
+  if (section.sections) {
+    if (options.full) {
+      for (const sub of section.sections) {
+        lines.push(formatSection(sub, options));
+      }
+    } else if (section.sections.length > 0) {
+      lines.push("**Subsections:**");
+      lines.push("");
+      for (const sub of section.sections) {
+        const summary = sub.summary ? ` — ${sub.summary}` : "";
+        lines.push(`- \`${sub.id}\`${summary}`);
+      }
+      lines.push("");
     }
   }
 
@@ -326,12 +439,84 @@ function formatSchema(schema: Schema, _options: FormatOptions): string {
     return `*Reference to* \`${schema.$ref}\``;
   }
 
+  // oneOf (union types)
+  if (schema.oneOf && schema.oneOf.length > 0) {
+    const typeLabel = schema.type ? `**Type:** \`${schema.type}\`` : "**Union type**";
+    lines.push(typeLabel);
+    if (schema.description) {
+      lines.push("");
+      lines.push(schema.description);
+    }
+    lines.push("");
+    lines.push("**One of:**");
+    for (const variant of schema.oneOf) {
+      const variantType = variant.type || variant.$ref || "any";
+      const desc = variant.description ? ` — ${variant.description}` : "";
+      lines.push(`- \`${variantType}\`${desc}`);
+    }
+    return lines.join("\n");
+  }
+
+  // allOf (intersection types)
+  if (schema.allOf && schema.allOf.length > 0) {
+    lines.push("**Type:** `object` (allOf)");
+    if (schema.description) {
+      lines.push("");
+      lines.push(schema.description);
+    }
+    lines.push("");
+    for (const part of schema.allOf) {
+      if (part.$ref) {
+        lines.push(`- **From \`${part.$ref}\`**: (referenced schema)`);
+      } else if (part.properties) {
+        const source = part.description || "inline";
+        const propNames = Object.keys(part.properties).map(n => `\`${n}\``).join(", ");
+        lines.push(`- **From ${source}**: ${propNames}`);
+      }
+    }
+    return lines.join("\n");
+  }
+
   const type = schema.type || "any";
-  lines.push(`**Type:** \`${type}\`${schema.nullable ? " | null" : ""}`);
+  const formatSuffix = schema.format ? ` (format: ${schema.format})` : "";
+  const nullableSuffix = schema.nullable ? " (nullable)" : "";
+  lines.push(`**Type:** \`${type}\`${formatSuffix}${nullableSuffix}`);
 
   if (schema.description) {
     lines.push("");
     lines.push(schema.description);
+  }
+
+  if (schema.enum) {
+    lines.push("");
+    lines.push(`**Enum:** ${schema.enum.map((v) => `\`${JSON.stringify(v)}\``).join(" | ")}`);
+  }
+
+  // Top-level constraints
+  const constraints: string[] = [];
+  if (schema.minimum !== undefined) constraints.push(`minimum=${schema.minimum}`);
+  if (schema.maximum !== undefined) constraints.push(`maximum=${schema.maximum}`);
+  if (constraints.length > 0) {
+    lines.push(`**Constraints:** ${constraints.join(", ")}`);
+  }
+
+  if (schema.pattern) {
+    lines.push(`**Pattern:** \`${schema.pattern}\``);
+  }
+
+  const lengthParts: string[] = [];
+  if (schema.minLength !== undefined) lengthParts.push(`Min length: ${schema.minLength}`);
+  if (schema.maxLength !== undefined) lengthParts.push(`Max length: ${schema.maxLength}`);
+  if (lengthParts.length > 0) {
+    lines.push(lengthParts.join(", "));
+  }
+
+  if (schema.default !== undefined) {
+    lines.push(`**Default:** \`${JSON.stringify(schema.default)}\``);
+  }
+
+  if (schema.example !== undefined) {
+    lines.push(`**Example:** \`${JSON.stringify(schema.example)}\``);
   }
 
   if (schema.properties) {
@@ -341,7 +526,10 @@ function formatSchema(schema: Schema, _options: FormatOptions): string {
     for (const [name, prop] of Object.entries(schema.properties)) {
       const required = schema.required?.includes(name) ? "✓" : "";
       const propType = prop.type || prop.$ref || "any";
-      lines.push(`| \`${name}\` | ${propType} | ${required} | ${prop.description || ""} |`);
+      const propFormat = prop.format ? ` (${prop.format})` : "";
+      const propNullable = prop.nullable ? " (nullable)" : "";
+      const desc = prop.description || "";
+      lines.push(`| \`${name}\` | ${propType}${propFormat}${propNullable} | ${required} | ${desc} |`);
     }
   }
 

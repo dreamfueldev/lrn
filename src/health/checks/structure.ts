@@ -100,7 +100,7 @@ export const S003: Check = {
           file: file.path,
           message: "Member file missing Kind declaration",
           suggestion:
-            "Add: **Kind:** function (or method, class, namespace, constant, type, property)",
+            "Add: **Kind:** function (or method, class, namespace, constant, type, property, component, command, resource)",
         },
       ];
     }
@@ -114,6 +114,9 @@ export const S003: Check = {
       "constant",
       "type",
       "property",
+      "component",
+      "command",
+      "resource",
     ];
     if (!validKinds.includes(kind.toLowerCase())) {
       return [

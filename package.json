@@ -1,6 +1,6 @@
 {
   "name": "lrn",
-  "version": "0.0.1",
+  "version": "0.1.0",
   "description": "Universal CLI for learning and querying programming interfaces",
   "type": "module",
   "bin": {
@@ -12,6 +12,7 @@
     "dev": "bun --watch src/index.ts",
     "typecheck": "tsc --noEmit",
     "test": "bun test",
+    "build:binaries": "bash scripts/build-binaries.sh",
     "clean": "rm -rf dist node_modules"
   },
   "dependencies": {

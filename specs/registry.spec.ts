@@ -1,221 +1,652 @@
-import { describe, it, expect, beforeAll, afterAll } from "bun:test";
+import { describe, it, expect, beforeEach, afterEach, mock } from "bun:test";
+import { createTestCache, runCLI } from "./fixtures/index.js";
+import {
+  readCredentials,
+  writeCredentials,
+  deleteCredentials,
+  requireToken,
+} from "../src/credentials.js";
+import { readCacheIndex, updateCacheIndex } from "../src/cache-index.js";
+import { RegistryClient } from "../src/registry.js";
+import { RegistryAuthError } from "../src/errors.js";
+import { mkdirSync, readFileSync, statSync, existsSync } from "node:fs";
+import { join } from "node:path";
+
+const originalFetch = globalThis.fetch;
+
+// Helpers
+function makeJson(body: unknown, status = 200): Response {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { "content-type": "application/json" },
+  });
+}
+
+function makeResponse(body: string | ArrayBuffer, status = 200, contentType = "application/octet-stream"): Response {
+  return new Response(body, {
+    status,
+    headers: { "content-type": contentType },
+  });
+}
 
 describe("Registry Commands", () => {
-  describe("lrn login", () => {
-    describe("OAuth flow", () => {
-      it.todo("opens browser to registry OAuth URL");
-      it.todo("starts local server to receive callback");
-      it.todo("handles OAuth callback with token");
-      it.todo("exchanges OAuth code for access token");
-      it.todo("stores credentials in ~/.lrn/credentials");
-      it.todo("shows logged in username on success");
-      it.todo("handles OAuth cancellation");
-      it.todo("handles OAuth error response");
-      it.todo("times out if no callback received");
+  let cacheDir: string;
+  let cleanup: () => void;
+
+  beforeEach(() => {
+    const cache = createTestCache([]);
+    cacheDir = cache.cacheDir;
+    cleanup = cache.cleanup;
+  });
+
+  afterEach(() => {
+    globalThis.fetch = originalFetch;
+    cleanup();
+  });
+
+  // --- Credentials ---
+
+  describe("credentials", () => {
+    it("reads and writes credentials", () => {
+      const creds = { registry: "https://uselrn.dev", token: "tok_123", user: "Alice" };
+      writeCredentials(cacheDir, creds);
+      const read = readCredentials(cacheDir);
+      expect(read).toEqual(creds);
     });
 
-    describe("token authentication", () => {
-      it.todo("accepts --token flag for PAT authentication");
-      it.todo("validates token with registry API");
-      it.todo("stores valid token in credentials");
-      it.todo("rejects invalid token with error message");
-      it.todo("shows logged in username on success");
+    it("returns null for missing credentials", () => {
+      expect(readCredentials(cacheDir)).toBeNull();
     });
 
-    describe("credentials storage", () => {
-      it.todo("creates ~/.lrn directory if not exists");
-      it.todo("stores token in ~/.lrn/credentials");
-      it.todo("stores username in credentials");
-      it.todo("stores token expiry in credentials");
-      it.todo("sets file permissions to 600");
-      it.todo("overwrites existing credentials");
+    it("returns null for corrupt credentials", () => {
+      const { writeFileSync } = require("node:fs");
+      writeFileSync(join(cacheDir, "credentials"), "not json");
+      expect(readCredentials(cacheDir)).toBeNull();
+    });
+
+    it("sets file permissions to 0o600", () => {
+      writeCredentials(cacheDir, { registry: "https://uselrn.dev", token: "t", user: "u" });
+      const stats = statSync(join(cacheDir, "credentials"));
+      // 0o600 = 384 decimal. On macOS, mode includes file type bits.
+      expect(stats.mode & 0o777).toBe(0o600);
+    });
+
+    it("deletes credentials", () => {
+      writeCredentials(cacheDir, { registry: "https://uselrn.dev", token: "t", user: "u" });
+      deleteCredentials(cacheDir);
+      expect(readCredentials(cacheDir)).toBeNull();
+    });
+
+    it("delete is no-op when already missing", () => {
+      // Should not throw
+      deleteCredentials(cacheDir);
+    });
+
+    it("requireToken throws when no credentials", () => {
+      expect(() => requireToken(cacheDir)).toThrow(RegistryAuthError);
+    });
+
+    it("requireToken returns credentials when present", () => {
+      const creds = { registry: "https://uselrn.dev", token: "tok", user: "Bob" };
+      writeCredentials(cacheDir, creds);
+      expect(requireToken(cacheDir)).toEqual(creds);
     });
   });
+
+  // --- Cache Index ---
+
+  describe("cache index", () => {
+    it("returns empty index when missing", () => {
+      const idx = readCacheIndex(cacheDir);
+      expect(idx.packages).toEqual({});
+    });
+
+    it("creates and updates entries", () => {
+      updateCacheIndex(cacheDir, "stripe.com/stripe", {
+        version: "2024.1.0",
+        pulledAt: "2024-01-01T00:00:00Z",
+        checksum: "sha256:abc123",
+      });
+
+      const idx = readCacheIndex(cacheDir);
+      expect(idx.packages["stripe.com/stripe"]).toEqual({
+        version: "2024.1.0",
+        pulledAt: "2024-01-01T00:00:00Z",
+        checksum: "sha256:abc123",
+      });
+    });
+
+    it("updates existing entries without clobbering others", () => {
+      updateCacheIndex(cacheDir, "stripe.com/stripe", {
+        version: "1.0.0",
+        pulledAt: "2024-01-01T00:00:00Z",
+        checksum: "sha256:aaa",
+      });
+      updateCacheIndex(cacheDir, "react.dev/react", {
+        version: "18.0.0",
+        pulledAt: "2024-02-01T00:00:00Z",
+        checksum: "sha256:bbb",
+      });
+
+      const idx = readCacheIndex(cacheDir);
+      expect(idx.packages["stripe.com/stripe"]).toBeDefined();
+      expect(idx.packages["react.dev/react"]).toBeDefined();
+    });
+  });
+
+  // --- lrn logout ---
 
   describe("lrn logout", () => {
-    it.todo("removes credentials file");
-    it.todo("shows confirmation message");
-    it.todo("handles missing credentials gracefully");
-    it.todo("does not error if already logged out");
-  });
-
-  describe("lrn whoami", () => {
-    it.todo("shows current username when logged in");
-    it.todo("shows registry URL");
-    it.todo("shows token expiry time");
-    it.todo("indicates if token is expired");
-    it.todo("shows 'not logged in' when no credentials");
-    it.todo("validates token is still valid with registry");
-  });
-
-  describe("lrn publish", () => {
-    describe("authentication", () => {
-      it.todo("requires authentication");
-      it.todo("shows error message when not logged in");
-      it.todo("uses stored credentials for API calls");
-      it.todo("handles expired token gracefully");
+    it("removes credentials and returns confirmation", async () => {
+      writeCredentials(cacheDir, { registry: "https://uselrn.dev", token: "t", user: "u" });
+      const result = await runCLI(["logout"], { env: { LRN_CACHE: cacheDir } });
+      expect(result.stdout).toBe("Logged out.");
+      expect(result.exitCode).toBe(0);
+      expect(readCredentials(cacheDir)).toBeNull();
     });
 
-    describe("package validation", () => {
-      it.todo("validates package has name field");
-      it.todo("validates package has version field");
-      it.todo("validates package name format");
-      it.todo("validates version is valid semver");
-      it.todo("validates package structure (members, guides, schemas)");
-      it.todo("errors on invalid package with details");
-    });
-
-    describe("publishing", () => {
-      it.todo("reads package from current directory by default");
-      it.todo("reads package from specified path");
-      it.todo("reads IR JSON package file");
-      it.todo("reads markdown directory package");
-      it.todo("publishes to user/package namespace");
-      it.todo("creates tarball of package content");
-      it.todo("uploads tarball to registry");
-      it.todo("creates package metadata in registry");
-      it.todo("shows publish URL on success");
-      it.todo("shows package name and version on success");
-    });
-
-    describe("versioning", () => {
-      it.todo("uses version from package.version field");
-      it.todo("prompts for version if not set (interactive)");
-      it.todo("errors if version not set (non-interactive)");
-      it.todo("errors if version already exists");
-      it.todo("allows overwrite with --force flag");
-      it.todo("suggests next version based on existing");
-    });
-
-    describe("visibility", () => {
-      it.todo("publishes as public by default");
-      it.todo("publishes as private with --private flag");
-      it.todo("shows visibility in success message");
-    });
-
-    describe("distribution tags", () => {
-      it.todo("adds latest tag by default");
-      it.todo("adds custom tag with --tag flag");
-      it.todo("supports multiple tags");
-    });
-
-    describe("error handling", () => {
-      it.todo("handles network errors gracefully");
-      it.todo("handles 401 unauthorized");
-      it.todo("handles 403 forbidden");
-      it.todo("handles 409 version conflict");
-      it.todo("handles 413 package too large");
-      it.todo("handles 500 server errors");
+    it("succeeds even when already logged out", async () => {
+      const result = await runCLI(["logout"], { env: { LRN_CACHE: cacheDir } });
+      expect(result.stdout).toBe("Logged out.");
+      expect(result.exitCode).toBe(0);
     });
   });
 
-  describe("lrn pull <user/package>", () => {
-    describe("package resolution", () => {
-      it.todo("resolves official packages without namespace");
-      it.todo("resolves user packages with namespace");
-      it.todo("resolves latest version by default");
-      it.todo("resolves specific version with @version suffix");
-      it.todo("resolves version range (^1.0.0, ~1.2.3)");
-      it.todo("resolves distribution tag (@beta, @latest)");
+  // --- lrn status ---
+
+  describe("lrn status", () => {
+    it("shows 'not logged in' when no credentials", async () => {
+      const result = await runCLI(["status"], { env: { LRN_CACHE: cacheDir } });
+      expect(result.stdout).toContain("Not logged in");
+      expect(result.exitCode).toBe(0);
     });
 
-    describe("caching", () => {
-      it.todo("checks local cache first");
-      it.todo("returns cached version if exact match");
-      it.todo("downloads if not in cache");
-      it.todo("downloads if cached version is stale");
-      it.todo("stores in ~/.lrn/packages/<namespace>/<name>/<version>/");
-      it.todo("updates cache index after download");
+    it("shows user and role when logged in", async () => {
+      writeCredentials(cacheDir, { registry: "https://uselrn.dev", token: "tok_valid", user: "Alice" });
+
+      globalThis.fetch = mock((url: string | URL | Request) => {
+        const u = typeof url === "string" ? url : url instanceof URL ? url.toString() : url.url;
+        if (u.includes("/me")) {
+          return Promise.resolve(makeJson({ user: { name: "Alice", email: "a@b.com" }, role: "admin" }));
+        }
+        return Promise.resolve(makeJson({ error: "not found" }, 404));
+      }) as typeof globalThis.fetch;
+
+      const result = await runCLI(["status"], { env: { LRN_CACHE: cacheDir } });
+      expect(result.stdout).toContain("User: Alice");
+      expect(result.stdout).toContain("Role: admin");
+      expect(result.exitCode).toBe(0);
     });
 
-    describe("downloading", () => {
-      it.todo("fetches package metadata from registry");
-      it.todo("downloads package tarball");
-      it.todo("verifies checksum after download");
-      it.todo("extracts tarball to cache directory");
-      it.todo("shows download progress");
-      it.todo("shows success message with local path");
-    });
+    it("handles expired session", async () => {
+      writeCredentials(cacheDir, { registry: "https://uselrn.dev", token: "tok_expired", user: "Bob" });
 
-    describe("authentication", () => {
-      it.todo("pulls public packages without auth");
-      it.todo("requires auth for private packages");
-      it.todo("sends auth token for private packages");
-      it.todo("shows error for unauthorized private access");
-    });
+      globalThis.fetch = mock((url: string | URL | Request) => {
+        const u = typeof url === "string" ? url : url instanceof URL ? url.toString() : url.url;
+        if (u.includes("/me")) {
+          return Promise.resolve(makeJson({ error: "unauthorized" }, 401));
+        }
+        return Promise.resolve(makeJson({ error: "not found" }, 404));
+      }) as typeof globalThis.fetch;
 
-    describe("error handling", () => {
-      it.todo("shows error for non-existent package");
-      it.todo("shows error for non-existent version");
-      it.todo("shows error for network failures");
-      it.todo("shows error for checksum mismatch");
-      it.todo("suggests similar packages on typo");
-    });
-  });
-
-  describe("lrn unpublish <user/package@version>", () => {
-    it.todo("requires authentication");
-    it.todo("requires exact version specification");
-    it.todo("prompts for confirmation");
-    it.todo("removes version from registry");
-    it.todo("shows success message");
-    it.todo("errors if version does not exist");
-    it.todo("errors if not package owner");
-    it.todo("errors if only version (cannot unpublish last)");
-  });
-
-  describe("lrn deprecate <user/package@version>", () => {
-    it.todo("requires authentication");
-    it.todo("marks version as deprecated");
-    it.todo("accepts deprecation message");
-    it.todo("shows warning when deprecated package pulled");
-    it.todo("allows un-deprecate with empty message");
-    it.todo("errors if not package owner");
-  });
-
-  describe("registry API integration", () => {
-    describe("GET /packages", () => {
-      it.todo("searches packages by query");
-      it.todo("paginates results with limit/offset");
-      it.todo("returns package summaries");
-    });
-
-    describe("GET /packages/{namespace}/{name}", () => {
-      it.todo("returns package info");
-      it.todo("returns available versions");
-      it.todo("returns latest version metadata");
-    });
-
-    describe("GET /packages/{namespace}/{name}@{version}", () => {
-      it.todo("returns version-specific metadata");
-      it.todo("returns download URL");
-      it.todo("returns checksum");
-    });
-
-    describe("POST /packages/{namespace}/{name}", () => {
-      it.todo("creates new package version");
-      it.todo("accepts multipart form data");
-      it.todo("validates package content");
-      it.todo("returns package URL");
-    });
-
-    describe("DELETE /packages/{namespace}/{name}@{version}", () => {
-      it.todo("removes package version");
-      it.todo("requires owner authentication");
+      const result = await runCLI(["status"], { env: { LRN_CACHE: cacheDir } });
+      expect(result.stdout).toContain("Session expired");
+      expect(result.exitCode).toBe(0);
+      // Should clean up stale credentials
+      expect(readCredentials(cacheDir)).toBeNull();
     });
   });
 
-  describe("credentials management", () => {
-    it.todo("reads credentials from ~/.lrn/credentials");
-    it.todo("supports custom credentials path via env var");
-    it.todo("handles missing credentials file");
-    it.todo("handles corrupted credentials file");
-    it.todo("refreshes expired tokens automatically");
+  // --- lrn login ---
+
+  describe("lrn login", () => {
+    it("completes device flow and stores credentials", async () => {
+      let pollCount = 0;
+
+      globalThis.fetch = mock((url: string | URL | Request, init?: RequestInit) => {
+        const u = typeof url === "string" ? url : url instanceof URL ? url.toString() : url.url;
+
+        if (u.includes("/api/auth/device/code")) {
+          return Promise.resolve(
+            makeJson({
+              deviceCode: "dev_123",
+              userCode: "ABCD-1234",
+              verificationUri: "https://uselrn.dev/device",
+              expiresIn: 300,
+              interval: 0.01, // Very short interval for testing
+            })
+          );
+        }
+
+        if (u.includes("/api/auth/device/token")) {
+          pollCount++;
+          if (pollCount < 2) {
+            return Promise.resolve(makeJson({ error: "authorization_pending" }, 400));
+          }
+          return Promise.resolve(makeJson({ token: "session_tok_abc" }));
+        }
+
+        if (u.includes("/api/auth/get-session")) {
+          return Promise.resolve(
+            makeJson({ user: { name: "TestUser", email: "test@example.com" } })
+          );
+        }
+
+        return Promise.resolve(makeJson({ error: "not found" }, 404));
+      }) as typeof globalThis.fetch;
+
+      const result = await runCLI(["login"], { env: { LRN_CACHE: cacheDir } });
+      expect(result.stdout).toContain("Logged in as TestUser");
+      expect(result.exitCode).toBe(0);
+
+      const creds = readCredentials(cacheDir);
+      expect(creds).not.toBeNull();
+      expect(creds!.token).toBe("session_tok_abc");
+      expect(creds!.user).toBe("TestUser");
+    });
+
+    it("calls device code endpoint with lrn-cli client ID", async () => {
+      let deviceCodeBody: string | undefined;
+
+      globalThis.fetch = mock((url: string | URL | Request, init?: RequestInit) => {
+        const u = typeof url === "string" ? url : url instanceof URL ? url.toString() : url.url;
+
+        if (u.includes("/api/auth/device/code")) {
+          deviceCodeBody = init?.body as string;
+          return Promise.resolve(
+            makeJson({
+              deviceCode: "dev_456",
+              userCode: "WXYZ-5678",
+              verificationUri: "https://uselrn.dev/device",
+              expiresIn: 300,
+              interval: 0.01,
+            })
+          );
+        }
+
+        if (u.includes("/api/auth/device/token")) {
+          return Promise.resolve(makeJson({ token: "tok_quick" }));
+        }
+
+        if (u.includes("/api/auth/get-session")) {
+          return Promise.resolve(
+            makeJson({ user: { name: "QuickUser", email: "q@b.com" } })
+          );
+        }
+
+        return Promise.resolve(makeJson({ error: "not found" }, 404));
+      }) as typeof globalThis.fetch;
+
+      const result = await runCLI(["login"], { env: { LRN_CACHE: cacheDir } });
+      expect(result.exitCode).toBe(0);
+      expect(deviceCodeBody).toBeDefined();
+      expect(JSON.parse(deviceCodeBody!).client_id).toBe("lrn-cli");
+    });
+
+    it("handles expired device code", async () => {
+      globalThis.fetch = mock((url: string | URL | Request) => {
+        const u = typeof url === "string" ? url : url instanceof URL ? url.toString() : url.url;
+
+        if (u.includes("/api/auth/device/code")) {
+          return Promise.resolve(
+            makeJson({
+              deviceCode: "dev_expired",
+              userCode: "DEAD-BEEF",
+              verificationUri: "https://uselrn.dev/device",
+              expiresIn: 300,
+              interval: 0.01,
+            })
+          );
+        }
+
+        if (u.includes("/api/auth/device/token")) {
+          return Promise.resolve(makeJson({ error: "expired_token" }, 400));
+        }
+
+        return Promise.resolve(makeJson({ error: "not found" }, 404));
+      }) as typeof globalThis.fetch;
+
+      const result = await runCLI(["login"], { env: { LRN_CACHE: cacheDir } });
+      expect(result.exitCode).not.toBe(0);
+      expect(result.stderr).toContain("expired");
+    });
   });
 
-  describe("offline mode", () => {
-    it.todo("works with cached packages when offline");
-    it.todo("shows warning when using cached data");
-    it.todo("errors when requested package not cached");
+  // --- lrn pull ---
+
+  describe("lrn pull", () => {
+    it("requires authentication", async () => {
+      const result = await runCLI(["pull", "stripe.com/stripe"], { env: { LRN_CACHE: cacheDir } });
+      expect(result.exitCode).not.toBe(0);
+      expect(result.stderr).toContain("Not logged in");
+    });
+
+    it("requires package name argument", async () => {
+      writeCredentials(cacheDir, { registry: "https://uselrn.dev", token: "tok", user: "u" });
+      const result = await runCLI(["pull"], { env: { LRN_CACHE: cacheDir } });
+      expect(result.exitCode).not.toBe(0);
+      expect(result.stderr).toContain("Missing package name");
+    });
+
+    it("downloads and caches a package", async () => {
+      writeCredentials(cacheDir, { registry: "https://uselrn.dev", token: "tok_admin", user: "Admin" });
+
+      // Create a minimal tar.gz containing a .lrn.json
+      const tarData = await createTestTarGz({ name: "stripe", version: "2024.1.0", members: [], guides: [], schemas: {} });
+
+      globalThis.fetch = mock((url: string | URL | Request) => {
+        const u = typeof url === "string" ? url : url instanceof URL ? url.toString() : url.url;
+
+        if (u.includes("/packages/stripe.com/stripe@")) {
+          return Promise.resolve(
+            makeJson({
+              package: { domain: "stripe.com", name: "stripe" },
+              version: {
+                version: "2024.1.0",
+                publishedAt: "2024-01-01T00:00:00Z",
+                size: tarData.byteLength,
+                checksum: `sha256:${computeSha256(tarData)}`,
+                memberCount: 5,
+                guideCount: 2,
+              },
+              downloadUrl: "https://r2.example.com/stripe-2024.1.0.tar.gz",
+            })
+          );
+        }
+
+        if (u.includes("/packages/stripe.com/stripe")) {
+          return Promise.resolve(
+            makeJson({
+              package: { domain: "stripe.com", name: "stripe" },
+              versions: [
+                {
+                  version: "2024.1.0",
+                  publishedAt: "2024-01-01T00:00:00Z",
+                  size: tarData.byteLength,
+                  checksum: `sha256:${computeSha256(tarData)}`,
+                  memberCount: 5,
+                  guideCount: 2,
+                },
+              ],
+            })
+          );
+        }
+
+        if (u.includes("r2.example.com")) {
+          return Promise.resolve(makeResponse(tarData));
+        }
+
+        return Promise.resolve(makeJson({ error: "not found" }, 404));
+      }) as typeof globalThis.fetch;
+
+      const result = await runCLI(["pull", "stripe.com/stripe"], { env: { LRN_CACHE: cacheDir } });
+      expect(result.exitCode).toBe(0);
+      expect(result.stdout).toContain("Pulled stripe.com/stripe@2024.1.0");
+
+      // Verify file was cached
+      const cachedPath = join(cacheDir, "packages", "stripe.com", "stripe", "2024.1.0.lrn.json");
+      expect(existsSync(cachedPath)).toBe(true);
+
+      // Verify cache index updated
+      const idx = readCacheIndex(cacheDir);
+      expect(idx.packages["stripe.com/stripe"]).toBeDefined();
+      expect(idx.packages["stripe.com/stripe"]!.version).toBe("2024.1.0");
+    });
+
+    it("skips already-cached packages", async () => {
+      writeCredentials(cacheDir, { registry: "https://uselrn.dev", token: "tok", user: "u" });
+
+      // Pre-populate cache
+      const pkgDir = join(cacheDir, "packages", "stripe.com", "stripe");
+      mkdirSync(pkgDir, { recursive: true });
+      const { writeFileSync } = require("node:fs");
+      writeFileSync(join(pkgDir, "2024.1.0.lrn.json"), "{}");
+
+      globalThis.fetch = mock(() => {
+        throw new Error("Should not fetch when cached");
+      }) as typeof globalThis.fetch;
+
+      const result = await runCLI(["pull", "stripe.com/stripe@2024.1.0"], { env: { LRN_CACHE: cacheDir } });
+      expect(result.exitCode).toBe(0);
+      expect(result.stdout).toContain("already cached");
+    });
+
+    it("re-downloads with --force", async () => {
+      writeCredentials(cacheDir, { registry: "https://uselrn.dev", token: "tok_admin", user: "Admin" });
+
+      // Pre-populate cache
+      const pkgDir = join(cacheDir, "packages", "stripe.com", "stripe");
+      mkdirSync(pkgDir, { recursive: true });
+      const { writeFileSync } = require("node:fs");
+      writeFileSync(join(pkgDir, "2024.1.0.lrn.json"), "{}");
+
+      const tarData = await createTestTarGz({ name: "stripe", version: "2024.1.0", members: [], guides: [], schemas: {} });
+
+      globalThis.fetch = mock((url: string | URL | Request) => {
+        const u = typeof url === "string" ? url : url instanceof URL ? url.toString() : url.url;
+
+        if (u.includes("/packages/stripe.com/stripe@")) {
+          return Promise.resolve(
+            makeJson({
+              package: { domain: "stripe.com", name: "stripe" },
+              version: {
+                version: "2024.1.0",
+                publishedAt: "2024-01-01T00:00:00Z",
+                size: tarData.byteLength,
+                checksum: `sha256:${computeSha256(tarData)}`,
+                memberCount: 5,
+                guideCount: 2,
+              },
+              downloadUrl: "https://r2.example.com/stripe.tar.gz",
+            })
+          );
+        }
+
+        if (u.includes("r2.example.com")) {
+          return Promise.resolve(makeResponse(tarData));
+        }
+
+        return Promise.resolve(makeJson({ error: "not found" }, 404));
+      }) as typeof globalThis.fetch;
+
+      const result = await runCLI(["pull", "stripe.com/stripe@2024.1.0", "--force"], { env: { LRN_CACHE: cacheDir } });
+      expect(result.exitCode).toBe(0);
+      expect(result.stdout).toContain("Pulled stripe.com/stripe@2024.1.0");
+    });
+
+    it("returns 403 when downloadUrl is missing (non-admin)", async () => {
+      writeCredentials(cacheDir, { registry: "https://uselrn.dev", token: "tok_user", user: "User" });
+
+      globalThis.fetch = mock((url: string | URL | Request) => {
+        const u = typeof url === "string" ? url : url instanceof URL ? url.toString() : url.url;
+
+        if (u.includes("/packages/stripe.com/stripe@")) {
+          return Promise.resolve(
+            makeJson({
+              package: { domain: "stripe.com", name: "stripe" },
+              version: {
+                version: "2024.1.0",
+                publishedAt: "2024-01-01T00:00:00Z",
+                size: 1000,
+                checksum: "sha256:abc",
+                memberCount: 5,
+                guideCount: 2,
+              },
+              // No downloadUrl — non-admin
+            })
+          );
+        }
+
+        if (u.includes("/packages/stripe.com/stripe")) {
+          return Promise.resolve(
+            makeJson({
+              package: { domain: "stripe.com", name: "stripe" },
+              versions: [
+                {
+                  version: "2024.1.0",
+                  publishedAt: "2024-01-01T00:00:00Z",
+                  size: 1000,
+                  checksum: "sha256:abc",
+                  memberCount: 5,
+                  guideCount: 2,
+                },
+              ],
+            })
+          );
+        }
+
+        return Promise.resolve(makeJson({ error: "not found" }, 404));
+      }) as typeof globalThis.fetch;
+
+      const result = await runCLI(["pull", "stripe.com/stripe"], { env: { LRN_CACHE: cacheDir } });
+      expect(result.exitCode).not.toBe(0);
+      expect(result.stderr).toContain("admin access");
+    });
+
+    it("handles 404 for missing package", async () => {
+      writeCredentials(cacheDir, { registry: "https://uselrn.dev", token: "tok", user: "u" });
+
+      globalThis.fetch = mock((url: string | URL | Request) => {
+        const u = typeof url === "string" ? url : url instanceof URL ? url.toString() : url.url;
+        if (u.includes("/packages/example.com/nonexistent")) {
+          return Promise.resolve(makeJson({ error: "not_found" }, 404));
+        }
+        return Promise.resolve(makeJson({ error: "not found" }, 404));
+      }) as typeof globalThis.fetch;
+
+      const result = await runCLI(["pull", "example.com/nonexistent"], { env: { LRN_CACHE: cacheDir } });
+      expect(result.exitCode).not.toBe(0);
+    });
+
+    it("verifies checksum and fails on mismatch", async () => {
+      writeCredentials(cacheDir, { registry: "https://uselrn.dev", token: "tok_admin", user: "Admin" });
+
+      const tarData = await createTestTarGz({ name: "stripe", version: "1.0.0", members: [], guides: [], schemas: {} });
+
+      globalThis.fetch = mock((url: string | URL | Request) => {
+        const u = typeof url === "string" ? url : url instanceof URL ? url.toString() : url.url;
+
+        if (u.includes("/packages/stripe.com/stripe@")) {
+          return Promise.resolve(
+            makeJson({
+              package: { domain: "stripe.com", name: "stripe" },
+              version: {
+                version: "1.0.0",
+                publishedAt: "2024-01-01T00:00:00Z",
+                size: tarData.byteLength,
+                checksum: "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+                memberCount: 1,
+                guideCount: 0,
+              },
+              downloadUrl: "https://r2.example.com/stripe.tar.gz",
+            })
+          );
+        }
+
+        if (u.includes("r2.example.com")) {
+          return Promise.resolve(makeResponse(tarData));
+        }
+
+        return Promise.resolve(makeJson({ error: "not found" }, 404));
+      }) as typeof globalThis.fetch;
+
+      const result = await runCLI(["pull", "stripe.com/stripe@1.0.0"], { env: { LRN_CACHE: cacheDir } });
+      expect(result.exitCode).not.toBe(0);
+      expect(result.stderr).toContain("Checksum verification failed");
+    });
+  });
+
+  // --- Registry client ---
+
+  describe("RegistryClient", () => {
+    it("maps 401 to RegistryAuthError", async () => {
+      globalThis.fetch = mock(() =>
+        Promise.resolve(makeJson({ error: "unauthorized" }, 401))
+      ) as typeof globalThis.fetch;
+
+      const client = new RegistryClient("https://uselrn.dev", "bad_token");
+      await expect(client.getPackage("stripe.com/stripe")).rejects.toThrow("Not logged in");
+    });
+
+    it("maps 429 to RegistryRateLimitError", async () => {
+      globalThis.fetch = mock(() =>
+        Promise.resolve(makeJson({ error: "rate_limit" }, 429))
+      ) as typeof globalThis.fetch;
+
+      const client = new RegistryClient("https://uselrn.dev", "tok");
+      await expect(client.getPackage("stripe.com/stripe")).rejects.toThrow("Rate limit");
+    });
+
+    it("maps 403 to RegistryForbiddenError", async () => {
+      globalThis.fetch = mock(() =>
+        Promise.resolve(makeJson({ error: "forbidden" }, 403))
+      ) as typeof globalThis.fetch;
+
+      const client = new RegistryClient("https://uselrn.dev", "tok");
+      await expect(client.getPackage("stripe.com/stripe")).rejects.toThrow("admin access");
+    });
+
+    it("maps network failure to NetworkError", async () => {
+      globalThis.fetch = mock(() =>
+        Promise.reject(new TypeError("fetch failed"))
+      ) as typeof globalThis.fetch;
+
+      const client = new RegistryClient("https://uselrn.dev", "tok");
+      await expect(client.getPackage("stripe.com/stripe")).rejects.toThrow("connect");
+    });
+  });
+
+  // --- Help ---
+
+  describe("help text", () => {
+    it("includes registry commands in main help", async () => {
+      const result = await runCLI(["--help"]);
+      expect(result.stdout).toContain("Registry Commands");
+      expect(result.stdout).toContain("login");
+      expect(result.stdout).toContain("logout");
+      expect(result.stdout).toContain("status");
+      expect(result.stdout).toContain("pull");
+    });
+
+    it("shows login help", async () => {
+      const result = await runCLI(["login", "--help"]);
+      expect(result.stdout).toContain("device flow");
+    });
+
+    it("shows pull help", async () => {
+      const result = await runCLI(["pull", "--help"]);
+      expect(result.stdout).toContain("--force");
+    });
   });
 });
+
+// --- Helpers ---
+
+function computeSha256(data: ArrayBuffer): string {
+  const { createHash } = require("node:crypto");
+  return createHash("sha256").update(Buffer.from(data)).digest("hex");
+}
+
+/**
+ * Create a .tar.gz file containing a .lrn.json for testing.
+ * Uses tar command to create a real archive.
+ */
+async function createTestTarGz(pkg: Record<string, unknown>): Promise<ArrayBuffer> {
+  const { mkdtempSync, writeFileSync, readFileSync, rmSync } = require("node:fs");
+  const { execSync } = require("node:child_process");
+  const { tmpdir } = require("node:os");
+  const { join } = require("node:path");
+
+  const tmpDir = mkdtempSync(join(tmpdir(), "lrn-test-tar-"));
+  const jsonPath = join(tmpDir, `${pkg.name}.lrn.json`);
+  writeFileSync(jsonPath, JSON.stringify(pkg, null, 2));
+
+  const tarPath = join(tmpDir, "package.tar.gz");
+  execSync(`tar czf ${JSON.stringify(tarPath)} -C ${JSON.stringify(tmpDir)} ${pkg.name}.lrn.json`, {
+    stdio: "ignore",
+  });
+
+  const data = readFileSync(tarPath);
+  rmSync(tmpDir, { recursive: true, force: true });
+  return data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength);
+}

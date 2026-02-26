@@ -234,6 +234,24 @@ function reconstructMemberHierarchy(flatMembers: Member[]): Member[] {
     originalNames.set(member, member.name);
   }
 
+  // Auto-create synthetic namespace parents for dotted names missing a parent member
+  for (const member of flatMembers) {
+    const name = originalNames.get(member)!;
+    const parts = name.split(".");
+    for (let i = 1; i < parts.length; i++) {
+      const prefix = parts.slice(0, i).join(".");
+      if (!memberMap.has(prefix)) {
+        const synthetic: Member = {
+          name: prefix,
+          kind: "namespace",
+        };
+        memberMap.set(prefix, synthetic);
+        originalNames.set(synthetic, prefix);
+        flatMembers.push(synthetic);
+      }
+    }
+  }
+
   // Track which members are nested as children
   const nestedMembers = new Set<Member>();
 

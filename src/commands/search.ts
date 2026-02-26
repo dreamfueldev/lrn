@@ -16,14 +16,14 @@ import {
   type SearchResults,
   type SearchResult,
 } from "../format/index.js";
+import { ArgumentError } from "../errors.js";
 
-export function runSearch(args: ParsedArgs, config: ResolvedConfig): void {
+export function runSearch(args: ParsedArgs, config: ResolvedConfig): string {
   const query = args.positional[0] || "";
   const packageName = args.package;
 
   if (!query) {
-    console.error("Usage: lrn search <query> or lrn <package> search <query>");
-    process.exit(1);
+    throw new ArgumentError("Usage: lrn search <query> or lrn <package> search <query>");
   }
 
   let results: SearchResult[];
@@ -44,6 +44,23 @@ export function runSearch(args: ParsedArgs, config: ResolvedConfig): void {
   // Sort by score descending
   results.sort((a, b) => b.score - a.score);
 
+  // Apply filters
+  if (args.options.tag && args.options.tag.length > 0) {
+    results = results.filter((r) =>
+      r.tags?.some((t) =>
+        args.options.tag.some((ft) => t.toLowerCase() === ft.toLowerCase())
+      )
+    );
+  }
+
+  if (args.options.kind) {
+    results = results.filter((r) => r.kind === args.options.kind);
+  }
+
+  if (!args.flags.deprecated) {
+    results = results.filter((r) => !r.deprecated);
+  }
+
   const searchResults: SearchResults = {
     kind: "search-results",
     query,
@@ -57,18 +74,18 @@ export function runSearch(args: ParsedArgs, config: ResolvedConfig): void {
     packageName,
   };
 
-  console.log(format(searchResults, options));
+  return format(searchResults, options);
 }
 
 function searchPackage(pkg: Package, query: string): SearchResult[] {
   const results: SearchResult[] = [];
-  const lowerQuery = query.toLowerCase();
+  const terms = query.toLowerCase().split(/\s+/).filter(Boolean);
 
   // Search members
   function searchMembers(members: Member[], path = ""): void {
     for (const member of members) {
       const fullPath = path ? `${path}.${member.name}` : member.name;
-      const score = calculateScore(member, lowerQuery, fullPath);
+      const score = calculateScore(member, terms, fullPath);
 
       if (score > 0) {
         results.push({
@@ -78,6 +95,9 @@ function searchPackage(pkg: Package, query: string): SearchResult[] {
           name: member.name,
           summary: member.summary,
           score,
+          tags: member.tags,
+          kind: member.kind,
+          deprecated: member.deprecated ? true : undefined,
         });
       }
 
@@ -90,7 +110,7 @@ function searchPackage(pkg: Package, query: string): SearchResult[] {
   // Search guides
   function searchGuides(guides: Guide[]): void {
     for (const guide of guides) {
-      const score = calculateGuideScore(guide, lowerQuery);
+      const score = calculateGuideScore(guide, terms);
 
       if (score > 0) {
         results.push({
@@ -100,6 +120,7 @@ function searchPackage(pkg: Package, query: string): SearchResult[] {
           name: guide.title,
           summary: guide.summary,
           score,
+          tags: guide.tags,
         });
       }
     }
@@ -111,77 +132,105 @@ function searchPackage(pkg: Package, query: string): SearchResult[] {
   return results;
 }
 
-function calculateScore(member: Member, query: string, path: string): number {
-  let score = 0;
+function calculateScore(member: Member, terms: string[], path: string): number {
   const lowerPath = path.toLowerCase();
   const lowerName = member.name.toLowerCase();
+  const lowerSummary = member.summary?.toLowerCase();
+  const lowerDescription = member.description?.toLowerCase();
 
-  // Exact name match (highest priority)
-  if (lowerName === query) {
-    score += 100;
-  }
-  // Name starts with query
-  else if (lowerName.startsWith(query)) {
-    score += 50;
-  }
-  // Name contains query
-  else if (lowerName.includes(query)) {
-    score += 30;
-  }
-  // Path contains query
-  else if (lowerPath.includes(query)) {
-    score += 20;
+  let totalScore = 0;
+
+  for (const term of terms) {
+    let termScore = 0;
+
+    // Exact name match (highest priority)
+    if (lowerName === term) {
+      termScore += 100;
+    }
+    // Name starts with term
+    else if (lowerName.startsWith(term)) {
+      termScore += 50;
+    }
+    // Name contains term
+    else if (lowerName.includes(term)) {
+      termScore += 30;
+    }
+    // Path contains term
+    else if (lowerPath.includes(term)) {
+      termScore += 20;
+    }
+
+    // Summary contains term
+    if (lowerSummary?.includes(term)) {
+      termScore += 10;
+    }
+
+    // Description contains term
+    if (lowerDescription?.includes(term)) {
+      termScore += 5;
+    }
+
+    // Tags contain term
+    if (member.tags?.some((t) => t.toLowerCase().includes(term))) {
+      termScore += 15;
+    }
+
+    // Parameter types contain term
+    if (member.parameters?.some((p) => p.type?.toLowerCase().includes(term))) {
+      termScore += 15;
+    }
+
+    // AND semantics: every term must match somewhere
+    if (termScore === 0) return 0;
+
+    totalScore += termScore;
   }
 
-  // Summary contains query
-  if (member.summary?.toLowerCase().includes(query)) {
-    score += 10;
-  }
-
-  // Description contains query
-  if (member.description?.toLowerCase().includes(query)) {
-    score += 5;
-  }
-
-  // Tags contain query
-  if (member.tags?.some((t) => t.toLowerCase().includes(query))) {
-    score += 15;
-  }
-
-  return score;
+  return totalScore;
 }
 
-function calculateGuideScore(guide: Guide, query: string): number {
-  let score = 0;
+function calculateGuideScore(guide: Guide, terms: string[]): number {
   const lowerTitle = guide.title.toLowerCase();
   const lowerSlug = guide.slug.toLowerCase();
+  const lowerSummary = guide.summary?.toLowerCase();
 
-  // Exact slug match
-  if (lowerSlug === query) {
-    score += 100;
-  }
-  // Slug starts with query
-  else if (lowerSlug.startsWith(query)) {
-    score += 50;
-  }
-  // Title contains query
-  else if (lowerTitle.includes(query)) {
-    score += 40;
-  }
-  // Slug contains query
-  else if (lowerSlug.includes(query)) {
-    score += 30;
+  let totalScore = 0;
+
+  for (const term of terms) {
+    let termScore = 0;
+
+    // Exact slug match
+    if (lowerSlug === term) {
+      termScore += 100;
+    }
+    // Slug starts with term
+    else if (lowerSlug.startsWith(term)) {
+      termScore += 50;
+    }
+    // Title contains term
+    else if (lowerTitle.includes(term)) {
+      termScore += 40;
+    }
+    // Slug contains term
+    else if (lowerSlug.includes(term)) {
+      termScore += 30;
+    }
+
+    // Summary contains term
+    if (lowerSummary?.includes(term)) {
+      termScore += 10;
+    }
+
+    // Tags contain term
+    if (guide.tags?.some((t) => t.toLowerCase().includes(term))) {
+      termScore += 15;
+    }
+
+    // AND semantics: every term must match somewhere
+    if (termScore === 0) return 0;
+
+    totalScore += termScore;
   }
 
-  // Summary contains query
-  if (guide.summary?.toLowerCase().includes(query)) {
-    score += 10;
-  }
-
-  // Tags contain query
-  if (guide.tags?.some((t) => t.toLowerCase().includes(query))) {
-    score += 15;
-  }
-
-  return score;
+  return totalScore;
 }

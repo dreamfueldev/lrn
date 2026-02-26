@@ -27,7 +27,7 @@ import type {
 export function runFormatDir(
   args: ParsedArgs,
   _config: ResolvedConfig
-): void {
+): string {
   const inputPath = args.positional[0];
   const outDir = args.options.out;
 
@@ -50,7 +50,7 @@ export function runFormatDir(
   // Create output directory structure
   formatPackageToDirectory(pkg, outDir);
 
-  console.log(`Formatted package to ${outDir}`);
+  return `Formatted package to ${outDir}`;
 }
 
 /**
@@ -236,7 +236,7 @@ export function formatMemberFile(member: Member): string {
 
   // Signature
   if (member.signature) {
-    lines.push("```typescript");
+    lines.push("```" + (member.signatureLanguage || "typescript"));
     lines.push(member.signature);
     lines.push("```");
     lines.push("");

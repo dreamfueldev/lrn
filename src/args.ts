@@ -21,8 +21,15 @@ export interface ParsedArgs {
     full: boolean;
     summary: boolean;
     deep: boolean;
+    signatures: boolean;
+    signature: boolean;
+    examples: boolean;
+    parameters: boolean;
+    withGuides: boolean;
     deprecated: boolean;
     noConfig: boolean;
+    force: boolean;
+    saveToPackageJson: boolean;
   };
 
   /** Value options */
@@ -33,6 +40,10 @@ export interface ParsedArgs {
     config: string | undefined;
     registry: string | undefined;
     out: string | undefined;
+    output: string | undefined;
+    packages: string | undefined;
+    path: string | undefined;
+    url: string | undefined;
   };
 
   /** Package name (with optional @version) */
@@ -64,8 +75,15 @@ export function parseArgs(argv: string[]): ParsedArgs {
       full: false,
       summary: false,
       deep: false,
+      signatures: false,
+      signature: false,
+      examples: false,
+      parameters: false,
+      withGuides: false,
       deprecated: false,
       noConfig: false,
+      force: false,
+      saveToPackageJson: false,
     },
     options: {
       format: undefined,
@@ -74,6 +92,10 @@ export function parseArgs(argv: string[]): ParsedArgs {
       config: undefined,
       registry: undefined,
       out: undefined,
+      output: undefined,
+      packages: undefined,
+      path: undefined,
+      url: undefined,
     },
     package: undefined,
     packageVersion: undefined,
@@ -127,6 +149,31 @@ export function parseArgs(argv: string[]): ParsedArgs {
       i++;
       continue;
     }
+    if (arg === "--signatures") {
+      result.flags.signatures = true;
+      i++;
+      continue;
+    }
+    if (arg === "--signature") {
+      result.flags.signature = true;
+      i++;
+      continue;
+    }
+    if (arg === "--examples") {
+      result.flags.examples = true;
+      i++;
+      continue;
+    }
+    if (arg === "--parameters") {
+      result.flags.parameters = true;
+      i++;
+      continue;
+    }
+    if (arg === "--with-guides") {
+      result.flags.withGuides = true;
+      i++;
+      continue;
+    }
     if (arg === "--deprecated") {
       result.flags.deprecated = true;
       i++;
@@ -134,6 +181,16 @@ export function parseArgs(argv: string[]): ParsedArgs {
     }
     if (arg === "--no-config") {
       result.flags.noConfig = true;
+      i++;
+      continue;
+    }
+    if (arg === "--force") {
+      result.flags.force = true;
+      i++;
+      continue;
+    }
+    if (arg === "--save-to-package-json") {
+      result.flags.saveToPackageJson = true;
       i++;
       continue;
     }
@@ -166,6 +223,26 @@ export function parseArgs(argv: string[]): ParsedArgs {
     }
     if ((arg === "--out" || arg === "-o") && i + 1 < args.length) {
       result.options.out = args[i + 1];
+      i += 2;
+      continue;
+    }
+    if (arg === "--path" && i + 1 < args.length) {
+      result.options.path = args[i + 1];
+      i += 2;
+      continue;
+    }
+    if (arg === "--url" && i + 1 < args.length) {
+      result.options.url = args[i + 1];
+      i += 2;
+      continue;
+    }
+    if (arg === "--output" && i + 1 < args.length) {
+      result.options.output = args[i + 1];
+      i += 2;
+      continue;
+    }
+    if (arg === "--packages" && i + 1 < args.length) {
+      result.options.packages = args[i + 1];
       i += 2;
       continue;
     }
@@ -212,7 +289,7 @@ function interpretPositionalArgs(result: ParsedArgs): void {
   const first = pos[0]!;
 
   // Global commands (no package context)
-  const globalCommands = ["sync", "add", "remove", "versions", "search", "parse", "format", "crawl", "health"];
+  const globalCommands = ["sync", "add", "remove", "versions", "search", "parse", "format", "crawl", "health", "llms-full", "login", "logout", "status", "pull", "teach"];
   if (globalCommands.includes(first)) {
     result.command = first;
     result.positional = pos.slice(1);
@@ -256,7 +333,7 @@ function interpretPositionalArgs(result: ParsedArgs): void {
 /**
  * Parse a package spec like "stripe" or "stripe@2024.1.0" or "@org/pkg@1.0.0"
  */
-function parsePackageSpec(spec: string): { name: string; version?: string } {
+export function parsePackageSpec(spec: string): { name: string; version?: string } {
   // Handle scoped packages: @org/name@version
   if (spec.startsWith("@")) {
     const lastAt = spec.lastIndexOf("@");
@@ -300,6 +377,11 @@ export function getUnknownFlags(args: ParsedArgs): string[] {
     "--full",
     "--summary",
     "--deep",
+    "--signatures",
+    "--signature",
+    "--examples",
+    "--parameters",
+    "--with-guides",
     "--deprecated",
     "--no-config",
     "--format",
@@ -309,10 +391,15 @@ export function getUnknownFlags(args: ParsedArgs): string[] {
     "--registry",
     "--out",
     "-o",
+    // Package management flags
+    "--path",
+    "--url",
+    "--save-to-package-json",
     // Crawl command flags
     "--depth",
     "--rate",
     "--output",
+    "--packages",
     "--include",
     "--exclude",
     "--dry-run",
@@ -320,6 +407,8 @@ export function getUnknownFlags(args: ParsedArgs): string[] {
     "--errors",
     "--warnings",
     "--fix",
+    // Registry command flags
+    "--force",
   ]);
 
   const unknownFlags: string[] = [];
@@ -340,7 +429,11 @@ export function getUnknownFlags(args: ParsedArgs): string[] {
           arg === "--config" ||
           arg === "--registry" ||
           arg === "--out" ||
-          arg === "-o") &&
+          arg === "-o" ||
+          arg === "--path" ||
+          arg === "--url" ||
+          arg === "--output" ||
+          arg === "--packages") &&
         i + 1 < args.raw.length
       ) {
         i++;

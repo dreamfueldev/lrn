@@ -511,7 +511,15 @@
               "id": "endpoint-requirements",
               "title": "Endpoint Requirements",
               "summary": "What your endpoint needs",
-              "content": "Your webhook endpoint must:\n- Accept POST requests\n- Return 200 status within 30 seconds\n- Be publicly accessible (HTTPS required in production)"
+              "content": "Your webhook endpoint must:\n- Accept POST requests\n- Return 200 status within 30 seconds\n- Be publicly accessible (HTTPS required in production)",
+              "sections": [
+                {
+                  "id": "tls-config",
+                  "title": "TLS Configuration",
+                  "summary": "HTTPS and certificate requirements",
+                  "content": "Your endpoint must use TLS 1.2 or higher. Self-signed certificates are not accepted in production."
+                }
+              ]
             }
           ]
         },
@@ -550,11 +558,16 @@
         "email": {
           "type": "string",
           "format": "email",
-          "description": "User's email address"
+          "description": "User's email address",
+          "pattern": "^[^@]+@[^@]+\\.[^@]+$",
+          "minLength": 5,
+          "maxLength": 255
         },
         "name": {
           "type": "string",
-          "description": "Full name"
+          "description": "Full name",
+          "minLength": 1,
+          "maxLength": 100
         },
         "role": {
           "type": "string",
@@ -563,7 +576,8 @@
         },
         "status": {
           "type": "string",
-          "enum": ["active", "inactive", "pending"]
+          "enum": ["active", "inactive", "pending"],
+          "nullable": true
         },
         "createdAt": {
           "type": "string",
@@ -598,7 +612,8 @@
         },
         "role": {
           "type": "string",
-          "default": "member"
+          "default": "member",
+          "example": "admin"
         }
       },
       "required": ["email", "name"]
@@ -629,7 +644,8 @@
         },
         "price": {
           "type": "integer",
-          "description": "Price in cents"
+          "description": "Price in cents",
+          "minimum": 0
         },
         "category": {
           "type": "string"
@@ -710,7 +726,8 @@
         },
         "quantity": {
           "type": "integer",
-          "minimum": 1
+          "minimum": 1,
+          "maximum": 999
         },
         "unitPrice": {
           "type": "integer"
@@ -760,6 +777,55 @@
           "type": "boolean"
         }
       }
+    },
+    "PaymentMethod": {
+      "description": "A payment method",
+      "oneOf": [
+        {
+          "type": "object",
+          "description": "Credit card payment",
+          "properties": {
+            "type": { "type": "string", "enum": ["credit_card"] },
+            "cardNumber": { "type": "string" },
+            "expiryMonth": { "type": "integer" },
+            "expiryYear": { "type": "integer" }
+          },
+          "required": ["type", "cardNumber", "expiryMonth", "expiryYear"]
+        },
+        {
+          "type": "object",
+          "description": "Bank transfer payment",
+          "properties": {
+            "type": { "type": "string", "enum": ["bank_transfer"] },
+            "accountNumber": { "type": "string" },
+            "routingNumber": { "type": "string" }
+          },
+          "required": ["type", "accountNumber", "routingNumber"]
+        }
+      ]
+    },
+    "AdminUser": {
+      "description": "An admin user with elevated permissions",
+      "allOf": [
+        { "$ref": "User" },
+        {
+          "type": "object",
+          "description": "Admin-specific fields",
+          "properties": {
+            "permissions": {
+              "type": "array",
+              "items": { "type": "string" },
+              "description": "List of admin permissions"
+            },
+            "lastLogin": {
+              "type": "string",
+              "format": "date-time",
+              "description": "Last login timestamp"
+            }
+          },
+          "required": ["permissions"]
+        }
+      ]
     }
   }
 }

@@ -1,9 +1,60 @@
-import { describe, it } from "bun:test";
+import { describe, it, expect, beforeAll, afterAll } from "bun:test";
+import {
+  loadAllFixturePackages,
+  createTestCache,
+  runCLI,
+} from "./fixtures/index.js";
 
 describe("Version Selection", () => {
+  let cacheDir: string;
+  let cleanup: () => void;
+
+  beforeAll(() => {
+    const packages = loadAllFixturePackages();
+    const cache = createTestCache(packages);
+    cacheDir = cache.cacheDir;
+    cleanup = cache.cleanup;
+  });
+
+  afterAll(() => {
+    cleanup();
+  });
+
+  const runWithCache = (args: string[]) =>
+    runCLI(["--format", "text", ...args], { env: { LRN_CACHE: cacheDir } });
+
   describe("<package>@<version> syntax", () => {
-    it.todo("parses package name and version from @ syntax");
-    it.todo("supports package names with scopes (@org/package@1.0.0)");
+    it("parses package name and version from @ syntax", async () => {
+      const result = await runWithCache(["mathlib@2.1.0"]);
+      expect(result.exitCode).toBe(0);
+      expect(result.stdout).toContain("mathlib");
+    });
+
+    it("supports package names with scopes (@org/package@1.0.0)", async () => {
+      const packages = [
+        {
+          name: "@myorg/utils",
+          version: "1.0.0",
+          source: { type: "custom" as const },
+          members: [
+            { name: "helper", kind: "function" as const, summary: "A helper" },
+          ],
+          guides: [],
+          schemas: {},
+        },
+      ];
+      const cache = createTestCache(packages);
+      try {
+        const result = await runCLI(["--format", "text", "@myorg/utils@1.0.0"], {
+          env: { LRN_CACHE: cache.cacheDir },
+        });
+        expect(result.exitCode).toBe(0);
+        expect(result.stdout).toContain("@myorg/utils");
+      } finally {
+        cache.cleanup();
+      }
+    });
+
     it.todo("treats text after @ as version specifier");
   });
 
@@ -35,8 +86,21 @@ describe("Version Selection", () => {
   });
 
   describe("version display", () => {
-    it.todo("shows version in package overview output");
+    it("shows version in package overview output", async () => {
+      const result = await runWithCache(["mathlib"]);
+      expect(result.exitCode).toBe(0);
+      expect(result.stdout).toContain("2.1.0");
+    });
+
     it.todo("shows version in list output header");
-    it.todo("shows version in JSON output");
+
+    it("shows version in JSON output", async () => {
+      const result = await runCLI(["--format", "json", "mathlib"], {
+        env: { LRN_CACHE: cacheDir },
+      });
+      expect(result.exitCode).toBe(0);
+      const parsed = JSON.parse(result.stdout);
+      expect(parsed.version).toBe("2.1.0");
+    });
   });
 });

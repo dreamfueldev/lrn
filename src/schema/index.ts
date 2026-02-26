@@ -50,7 +50,18 @@ export interface Package {
 
   /** Links to external resources */
   links?: PackageLinks;
+
+  /** What type of thing this package documents */
+  classification?: PackageClassification;
 }
+
+export type PackageClassification =
+  | "api"        // REST/GraphQL endpoints
+  | "library"    // functions, classes, types
+  | "components" // UI elements with variants/props
+  | "cli"        // commands, subcommands, flags
+  | "config"     // declarative resources/directives
+  | "framework"; // hybrid of multiple types
 
 export interface SourceInfo {
   /** The adapter/parser that produced this IR */
@@ -121,6 +132,14 @@ export interface Member {
    */
   signature?: string;
 
+  /**
+   * Language of the signature code block.
+   * Examples: "html", "bash", "hcl"
+   * Defaults to "typescript" when not set.
+   * Only stored when the signature language is not typescript/ts/javascript/js.
+   */
+  signatureLanguage?: string;
+
   /** Input parameters (for functions, methods, constructors) */
   parameters?: Parameter[];
 
@@ -167,7 +186,10 @@ export type MemberKind =
   | "namespace" // grouping container (module, namespace, API category)
   | "constant" // constant value
   | "type" // type alias, interface, enum
-  | "property"; // property on a class/object
+  | "property" // property on a class/object
+  | "component" // UI component (daisyUI button, Radix Dialog)
+  | "command" // CLI command/subcommand (docker run, git commit)
+  | "resource"; // infrastructure/config resource (aws_lambda_function, K8s Deployment)
 
 // ============================================================
 // Guide - Prose Documentation
@@ -501,7 +523,7 @@ export interface LrnConfig {
   /** JSON Schema reference for editor support */
   $schema?: string;
 
-  /** Registry endpoint (default: https://registry.lrn.dev) */
+  /** Registry endpoint (default: https://uselrn.dev) */
   registry?: string;
 
   /** Package specifications */

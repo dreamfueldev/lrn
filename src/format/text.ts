@@ -58,7 +58,7 @@ export function formatText(data: FormattableData, options: FormatOptions): strin
     return formatSection(data as Section, options);
   }
 
-  if ("type" in data || "properties" in data || "$ref" in data) {
+  if ("type" in data || "properties" in data || "$ref" in data || "oneOf" in data || "allOf" in data) {
     // Schema
     return formatSchema(data as Schema, options);
   }
@@ -104,13 +104,9 @@ function formatPackage(pkg: Package, options: FormatOptions): string {
   if (pkg.members.length > 0) {
     lines.push("");
     lines.push(`Members (${pkg.members.length}):`);
-    const shown = options.full ? pkg.members : pkg.members.slice(0, 10);
-    for (const member of shown) {
+    for (const member of pkg.members) {
       const summary = member.summary ? `  ${member.summary}` : "";
       lines.push(`  ${member.name}${summary}`);
-    }
-    if (!options.full && pkg.members.length > 10) {
-      lines.push(`  ... and ${pkg.members.length - 10} more`);
     }
   }
 
@@ -142,9 +138,11 @@ function formatMemberList(members: Member[], options: FormatOptions): string {
   function formatMemberLine(member: Member, indent: string, path: string): void {
     const fullPath = path ? `${path}.${member.name}` : member.name;
     const kind = `[${member.kind}]`;
-    const summary = member.summary ? `  ${member.summary}` : "";
+    const detail = options.signatures && member.signature
+      ? `  ${member.signature}`
+      : (member.summary ? `  ${member.summary}` : "");
     const deprecated = member.deprecated ? " (deprecated)" : "";
-    lines.push(`${indent}${fullPath} ${kind}${deprecated}${summary}`);
+    lines.push(`${indent}${fullPath} ${kind}${deprecated}${detail}`);
 
     if (options.full && member.children) {
       for (const child of member.children) {
@@ -161,6 +159,17 @@ function formatMemberList(members: Member[], options: FormatOptions): string {
 }
 
 function formatMember(member: Member, options: FormatOptions): string {
+  // Extraction flags: return only the requested part
+  if (options.extraction === "signature") {
+    return member.signature || "No signature available.";
+  }
+  if (options.extraction === "examples") {
+    return formatExamplesExtraction(member.examples);
+  }
+  if (options.extraction === "parameters") {
+    return formatParametersExtraction(member.parameters);
+  }
+
   const lines: string[] = [];
 
   // Header
@@ -176,6 +185,47 @@ function formatMember(member: Member, options: FormatOptions): string {
   if (member.http) {
     lines.push("");
     lines.push(`${member.http.method} ${member.http.path}`);
+
+    // Path parameters
+    const pathParams = member.parameters?.filter(p => p.in === "path");
+    if (pathParams && pathParams.length > 0) {
+      lines.push("");
+      lines.push("Path Parameters:");
+      for (const param of pathParams) {
+        const required = param.required ? " (required)" : "";
+        const type = param.type || "string";
+        const desc = param.description ? `  ${param.description}` : "";
+        lines.push(`  {${param.name}}  ${type}${desc}${required}`);
+      }
+    }
+
+    // Query parameters
+    if (member.http.query && member.http.query.length > 0) {
+      lines.push("");
+      lines.push("Query Parameters:");
+      for (const param of member.http.query) {
+        const type = param.type || "string";
+        const desc = param.description ? `  ${param.description}` : "";
+        const defaultVal = param.default !== undefined ? `  (default: ${JSON.stringify(param.default)})` : "";
+        lines.push(`  ${param.name}  ${type}${desc}${defaultVal}`);
+      }
+    }
+
+    // Responses
+    if (member.http.responses) {
+      lines.push("");
+      lines.push("Responses:");
+      for (const [status, response] of Object.entries(member.http.responses)) {
+        const schema = typeof response.schema === "string" ? ` → ${response.schema}` : "";
+        lines.push(`  ${status}  ${response.description}${schema}`);
+      }
+    }
+
+    // Scopes
+    if (member.http.scopes && member.http.scopes.length > 0) {
+      lines.push("");
+      lines.push(`Scopes: ${member.http.scopes.join(", ")}`);
+    }
   }
 
   // Signature
@@ -261,6 +311,47 @@ function formatMember(member: Member, options: FormatOptions): string {
     lines.push(`Deprecated: ${member.deprecated}`);
   }
 
+  // Since version
+  if (member.since) {
+    lines.push("");
+    lines.push(`Since: ${member.since}`);
+  }
+
+  return lines.join("\n");
+}
+
+function formatExamplesExtraction(examples: Example[] | undefined): string {
+  if (!examples || examples.length === 0) {
+    return "No examples available.";
+  }
+  const lines: string[] = [];
+  for (const example of examples) {
+    if (lines.length > 0) lines.push("");
+    if (example.title) {
+      const lang = example.language ? ` (${example.language})` : "";
+      lines.push(`## ${example.title}${lang}`);
+    }
+    if (example.description) {
+      lines.push(example.description);
+    }
+    lines.push(example.code);
+  }
+  return lines.join("\n");
+}
+
+function formatParametersExtraction(parameters: import("../schema/index.js").Parameter[] | undefined): string {
+  if (!parameters || parameters.length === 0) {
+    return "No parameters available.";
+  }
+  const lines: string[] = [];
+  for (const param of parameters) {
+    const type = param.type || "any";
+    const desc = param.description || "";
+    const required = param.required ? "(required)" : "";
+    const defaultVal = param.default !== undefined ? `(default: ${JSON.stringify(param.default)})` : "";
+    const parts = [param.name, type, desc, required, defaultVal].filter(Boolean);
+    lines.push(parts.join("  "));
+  }
   return lines.join("\n");
 }
 
@@ -369,10 +460,19 @@ function formatSection(section: Section, options: FormatOptions): string {
   }
 
   // Subsections
-  if (section.sections && options.full) {
-    for (const sub of section.sections) {
+  if (section.sections) {
+    if (options.full) {
+      for (const sub of section.sections) {
+        lines.push("");
+        lines.push(formatSection(sub, options));
+      }
+    } else if (section.sections.length > 0) {
       lines.push("");
-      lines.push(formatSection(sub, options));
+      lines.push("Subsections:");
+      for (const sub of section.sections) {
+        const summary = sub.summary ? ` — ${sub.summary}` : "";
+        lines.push(`  ${sub.id}${summary}`);
+      }
     }
   }
 
@@ -387,19 +487,80 @@ function formatSchema(schema: Schema, options: FormatOptions): string {
     return lines.join("\n");
   }
 
+  // oneOf (union types)
+  if (schema.oneOf && schema.oneOf.length > 0) {
+    const typeLabel = schema.type ? `Type: ${schema.type}` : "Union type";
+    lines.push(typeLabel);
+    if (schema.description) {
+      lines.push(schema.description);
+    }
+    lines.push("");
+    lines.push("One of:");
+    for (const variant of schema.oneOf) {
+      const variantType = variant.type || variant.$ref || "any";
+      const desc = variant.description ? ` — ${variant.description}` : "";
+      lines.push(`  - ${variantType}${desc}`);
+    }
+    return lines.join("\n");
+  }
+
+  // allOf (intersection types)
+  if (schema.allOf && schema.allOf.length > 0) {
+    lines.push("Type: object (allOf)");
+    if (schema.description) {
+      lines.push(schema.description);
+    }
+    lines.push("");
+    for (const part of schema.allOf) {
+      if (part.$ref) {
+        lines.push(`  From ${part.$ref}: (referenced schema)`);
+      } else if (part.properties) {
+        const source = part.description || "inline";
+        const propNames = Object.keys(part.properties).join(", ");
+        lines.push(`  From ${source}: ${propNames}`);
+      }
+    }
+    return lines.join("\n");
+  }
+
   const type = schema.type || "any";
-  lines.push(`Type: ${type}${schema.nullable ? " | null" : ""}`);
+  const formatSuffix = schema.format ? ` (format: ${schema.format})` : "";
+  const nullableSuffix = schema.nullable ? " (nullable)" : "";
+  lines.push(`Type: ${type}${formatSuffix}${nullableSuffix}`);
 
   if (schema.description) {
     lines.push(schema.description);
   }
 
-  if (schema.format) {
-    lines.push(`Format: ${schema.format}`);
-  }
-
   if (schema.enum) {
     lines.push(`Enum: ${schema.enum.map((v) => JSON.stringify(v)).join(" | ")}`);
+  }
+
+  // Top-level constraints
+  const constraints: string[] = [];
+  if (schema.minimum !== undefined) constraints.push(`minimum=${schema.minimum}`);
+  if (schema.maximum !== undefined) constraints.push(`maximum=${schema.maximum}`);
+  if (constraints.length > 0) {
+    lines.push(`Constraints: ${constraints.join(", ")}`);
+  }
+
+  if (schema.pattern) {
+    lines.push(`Pattern: ${schema.pattern}`);
+  }
+
+  const lengthParts: string[] = [];
+  if (schema.minLength !== undefined) lengthParts.push(`Min length: ${schema.minLength}`);
+  if (schema.maxLength !== undefined) lengthParts.push(`Max length: ${schema.maxLength}`);
+  if (lengthParts.length > 0) {
+    lines.push(lengthParts.join(", "));
+  }
+
+  if (schema.default !== undefined) {
+    lines.push(`Default: ${JSON.stringify(schema.default)}`);
+  }
+
+  if (schema.example !== undefined) {
+    lines.push(`Example: ${JSON.stringify(schema.example)}`);
   }
 
   if (schema.properties) {
@@ -408,8 +569,31 @@ function formatSchema(schema: Schema, options: FormatOptions): string {
     for (const [name, prop] of Object.entries(schema.properties)) {
       const required = schema.required?.includes(name) ? " (required)" : "";
       const propType = prop.type || prop.$ref || "any";
+      const propFormat = prop.format ? ` (format: ${prop.format})` : "";
+      const propNullable = prop.nullable ? " (nullable)" : "";
       const desc = prop.description ? `  ${prop.description}` : "";
-      lines.push(`  ${name}: ${propType}${required}${desc}`);
+      const propDefault = prop.default !== undefined ? `  (default: ${JSON.stringify(prop.default)})` : "";
+      const propExample = prop.example !== undefined ? `  Example: ${JSON.stringify(prop.example)}` : "";
+      lines.push(`  ${name}: ${propType}${propFormat}${propNullable}${required}${desc}${propDefault}${propExample}`);
+
+      // Property-level constraints
+      const propConstraints: string[] = [];
+      if (prop.minimum !== undefined) propConstraints.push(`minimum=${prop.minimum}`);
+      if (prop.maximum !== undefined) propConstraints.push(`maximum=${prop.maximum}`);
+      if (propConstraints.length > 0) {
+        lines.push(`    Constraints: ${propConstraints.join(", ")}`);
+      }
+
+      if (prop.pattern) {
+        lines.push(`    Pattern: ${prop.pattern}`);
+      }
+
+      const propLengthParts: string[] = [];
+      if (prop.minLength !== undefined) propLengthParts.push(`Min length: ${prop.minLength}`);
+      if (prop.maxLength !== undefined) propLengthParts.push(`Max length: ${prop.maxLength}`);
+      if (propLengthParts.length > 0) {
+        lines.push(`    ${propLengthParts.join(", ")}`);
+      }
     }
   }
 

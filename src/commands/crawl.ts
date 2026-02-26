@@ -11,7 +11,7 @@ import { CrawlError, CLIError } from "../errors.js";
 /**
  * Run the crawl command
  */
-export async function runCrawl(args: ParsedArgs): Promise<void> {
+export async function runCrawl(args: ParsedArgs): Promise<string> {
   // Get URL from positional args
   const url = args.positional[0];
   if (!url) {
@@ -27,6 +27,7 @@ export async function runCrawl(args: ParsedArgs): Promise<void> {
 
   try {
     await crawl(options);
+    return "";
   } catch (err) {
     if (err instanceof CrawlError) {
       throw new CLIError(err.message, err.exitCode);
@@ -40,16 +41,6 @@ export async function runCrawl(args: ParsedArgs): Promise<void> {
  */
 function parseCrawlOptions(args: ParsedArgs, url: string): CrawlOptions {
   const raw = args.raw;
-
-  // Parse --depth
-  let depth = 1;
-  const depthIdx = raw.indexOf("--depth");
-  if (depthIdx !== -1 && depthIdx + 1 < raw.length) {
-    const val = parseInt(raw[depthIdx + 1]!, 10);
-    if (!isNaN(val) && val >= 0) {
-      depth = val;
-    }
-  }
 
   // Parse --rate
   let rate = 2;
@@ -97,7 +88,6 @@ function parseCrawlOptions(args: ParsedArgs, url: string): CrawlOptions {
 
   return {
     url,
-    depth,
     rate,
     output,
     include,

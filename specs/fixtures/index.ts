@@ -24,7 +24,7 @@ export const CONFIG_DIR = join(__dirname, "config");
 /**
  * Available fixture package names
  */
-export const FIXTURE_PACKAGES = ["mathlib", "acme-api"] as const;
+export const FIXTURE_PACKAGES = ["mathlib", "acme-api", "uikit", "mycli", "infra-aws"] as const;
 export type FixturePackageName = (typeof FIXTURE_PACKAGES)[number];
 
 /**
@@ -89,6 +89,9 @@ export function getMalformedConfigPath(): string {
 export const fixtures = {
   mathlib: loadFixturePackage("mathlib"),
   acmeApi: loadFixturePackage("acme-api"),
+  uikit: loadFixturePackage("uikit"),
+  mycli: loadFixturePackage("mycli"),
+  infraAws: loadFixturePackage("infra-aws"),
   config: {
     basic: loadFixtureConfig("basic"),
     withLocalPath: loadFixtureConfig("with-local-path"),
@@ -137,34 +140,28 @@ export async function runCLI(
   args: string[],
   options: { env?: Record<string, string>; cwd?: string } = {}
 ): Promise<CLIResult> {
-  const { spawn } = require("node:child_process");
-  const path = require("node:path");
+  // Lazy import to avoid circular dependency at module load time
+  const { execute } = await import("../../src/api.js");
 
-  return new Promise((resolve) => {
-    const cliPath = path.join(__dirname, "../../dist/index.js");
+  const savedEnv = { ...process.env };
+  if (options.env) {
+    Object.assign(process.env, options.env);
+  }
 
-    const child = spawn("node", [cliPath, ...args], {
-      env: { ...process.env, ...options.env },
-      cwd: options.cwd || process.cwd(),
-    });
-
-    let stdout = "";
-    let stderr = "";
-
-    child.stdout.on("data", (data: Buffer) => {
-      stdout += data.toString();
-    });
-
-    child.stderr.on("data", (data: Buffer) => {
-      stderr += data.toString();
-    });
-
-    child.on("close", (code: number | null) => {
-      resolve({
-        stdout: stdout.trim(),
-        stderr: stderr.trim(),
-        exitCode: code ?? 0,
-      });
-    });
-  });
+  try {
+    const result = await execute(["node", "lrn", ...args]);
+    return {
+      stdout: result.stdout.trim(),
+      stderr: result.stderr.trim(),
+      exitCode: result.exitCode,
+    };
+  } finally {
+    // Restore environment
+    for (const key of Object.keys(process.env)) {
+      if (!(key in savedEnv)) {
+        delete process.env[key];
+      }
+    }
+    Object.assign(process.env, savedEnv);
+  }
 }

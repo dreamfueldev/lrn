@@ -150,7 +150,13 @@ describe("Guide Commands", () => {
       expect(result.stdout).toContain("curl");
     });
 
-    it.todo("shows subsection list if section has children");
+    it("shows subsection list if section has children", async () => {
+      // webhooks.setup has subsection "endpoint-requirements"
+      const result = await runWithCache(["acme-api", "guide", "webhooks.setup"]);
+      expect(result.exitCode).toBe(0);
+      expect(result.stdout).toContain("Subsections:");
+      expect(result.stdout).toContain("endpoint-requirements");
+    });
 
     it("fails with exit code 3 when section not found", async () => {
       const result = await runWithCache(["acme-api", "guide", "quickstart.nonexistent"]);
@@ -172,7 +178,15 @@ describe("Guide Commands", () => {
         expect(result.exitCode).toBe(0);
       });
 
-      it.todo("resolves deeply nested section path");
+      it("resolves deeply nested section path", async () => {
+        const result = await runWithCache([
+          "acme-api",
+          "guide",
+          "webhooks.setup.endpoint-requirements.tls-config",
+        ]);
+        expect(result.stdout).toContain("TLS Configuration");
+        expect(result.exitCode).toBe(0);
+      });
     });
   });
 

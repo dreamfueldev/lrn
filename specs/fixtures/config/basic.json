@@ -1,6 +1,6 @@
 {
-  "$schema": "https://lrn.dev/schema/config.json",
-  "registry": "https://registry.lrn.dev",
+  "$schema": "https://uselrn.dev/schema/config.json",
+  "registry": "https://uselrn.dev",
   "cache": "~/.lrn",
   "defaultFormat": "text",
   "packages": {

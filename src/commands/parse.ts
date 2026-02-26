@@ -17,7 +17,7 @@ import { parsePackage } from "../parse/index.js";
 export async function runParse(
   args: ParsedArgs,
   _config: ResolvedConfig
-): Promise<void> {
+): Promise<string> {
   const inputPath = args.positional[0];
 
   if (!inputPath) {
@@ -35,8 +35,8 @@ export async function runParse(
 
   if (outFile) {
     writeFileSync(outFile, jsonOutput);
-    console.log(`Wrote package IR to ${outFile}`);
+    return `Wrote package IR to ${outFile}`;
   } else {
-    console.log(jsonOutput);
+    return jsonOutput;
   }
 }

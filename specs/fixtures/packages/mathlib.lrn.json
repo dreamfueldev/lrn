@@ -129,6 +129,7 @@
       "summary": "Calculate square root",
       "description": "Returns the square root of a number. Returns NaN for negative inputs.",
       "signature": "(n: number) => number",
+      "since": "2.0.0",
       "parameters": [
         {
           "name": "n",
@@ -315,6 +316,13 @@
           "label": "Calculator class"
         }
       ]
+    },
+    {
+      "name": "PI",
+      "kind": "constant",
+      "summary": "The mathematical constant pi",
+      "signature": "3.14159265",
+      "tags": ["math"]
     }
   ],
   "guides": [
@@ -404,6 +412,11 @@
         }
       },
       "required": ["x", "y"]
+    },
+    "RoundingMode": {
+      "type": "string",
+      "description": "Rounding strategy for decimal operations",
+      "enum": ["ceil", "floor", "round", "trunc"]
     }
   }
 }

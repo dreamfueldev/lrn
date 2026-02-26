@@ -43,12 +43,12 @@ lrn/
 └── bunfig.toml
 ```
 
-Separate repo for registry data: `admin-dreamfuel/lrn-registry`
+Separate repo for registry data: `dreamfueldev/lrn-registry`
 
 ## Tech Stack
 
 - **Language**: TypeScript (ESM)
-- **Runtime/Toolchain**: Bun (package manager, bundler, test runner)
+- **Runtime/Toolchain**: Bun (package manager, bundler, test runner) — Bun is the standard toolchain across all lrn-project repos
 - **CLI**: Node.js target (for npm compatibility)
 
 ## The IR (Intermediate Representation)
@@ -65,11 +65,13 @@ interface Package {
   members: Member[];           // structured API documentation
   guides: Guide[];             // prose documentation
   schemas: Record<string, Schema>;  // reusable type definitions
+  classification?: PackageClassification; // api, library, components, cli, config, framework
 }
 
 interface Member {
   name: string;                // e.g., "charges.create" or "useState"
-  kind: 'function' | 'method' | 'class' | 'namespace' | 'constant' | 'type' | 'property';
+  kind: 'function' | 'method' | 'class' | 'namespace' | 'constant' | 'type'
+      | 'property' | 'component' | 'command' | 'resource';
   summary?: string;            // one-liner for list views
   description?: string;        // full description
   signature?: string;          // human-readable: "(options: Config) => Client"
@@ -105,6 +107,7 @@ interface Guide {
 ```bash
 lrn                            # List all cached packages
 lrn sync                       # Sync specs for project dependencies
+lrn teach                      # Generate agent orientation and strategy
 lrn <package>                  # Show package overview
 lrn <package> list             # List members
 lrn <package> <member.path>    # Show member details
@@ -127,7 +130,8 @@ Key flags: `--format (text|json|markdown|summary)`, `--full`, `--deep`, `--tag`,
 - [x] Package cache and config system
 - [x] Search functionality (members, guides, tags, descriptions)
 - [x] Filtering (--tag, --kind, --deprecated, combinations)
-- [ ] Registry API service (blocks: sync, add, remove, versions commands)
+- [x] Package management commands (add, remove, sync)
+- [ ] Registry API service (blocks: versions command)
 - [ ] OpenAPI adapter
 - [ ] TypeScript adapter
 - [ ] Crawl + LLM extraction pipeline
@@ -135,7 +139,7 @@ Key flags: `--format (text|json|markdown|summary)`, `--full`, `--deep`, `--tag`,
 ### Test Progress
 
 See `TEST_PROGRESS.md` for detailed tracking of:
-- 213 passing tests, 241 TODO tests (47% complete)
+- 853 passing tests, 49 TODO tests (95% complete)
 - Categorized remaining work (registry features, config system, HTTP details, etc.)
 - Priority order for implementation
 
@@ -151,18 +155,26 @@ bun run typecheck     # TypeScript checking
 
 ## Key Files
 
-- `src/schema/index.ts` - IR type definitions
+- `src/schema/index.ts` - IR type definitions (Package, Member, Guide, Schema, PackageClassification)
 - `src/index.ts` - CLI entry point
 - `src/commands/` - Command implementations
 - `src/format/` - Output formatters
 - `src/cache.ts` - Package loading from ~/.lrn/packages/
 - `src/config.ts` - Config loading (lrn.config.json)
-- `specs/fixtures/` - Test fixture packages (mathlib, acme-api)
+- `src/classify.ts` - Package classification detection from IR heuristics
+- `src/orientation.ts` - Orientation blurb generation per classification
+- `specs/fixtures/` - Test fixture packages (mathlib, acme-api, uikit, mycli, infra-aws)
 - `TEST_PROGRESS.md` - Test implementation tracking
+
+## Testing
+
+Tests follow the project-wide public-API-only philosophy (see root `CLAUDE.md`). The public API is the CLI itself — all tests spawn `lrn` as a subprocess via the `runCLI` helper and assert on stdout, stderr, and exit codes. No internal modules are imported directly in test files.
+
+Tests use `createTestCache()` to set up a temporary cache directory with fixture packages, then invoke CLI commands against that cache.
 
 ## Test Fixtures
 
-Two fixture packages in `specs/fixtures/packages/`:
+Five fixture packages in `specs/fixtures/packages/`:
 
 - **mathlib** - TypeScript library example (functions, classes, types)
   - Functions: add, subtract, multiply, divide, sqrt, pow
@@ -175,5 +187,17 @@ Two fixture packages in `specs/fixtures/packages/`:
   - HTTP methods with paths, query params, request/response schemas
   - Multiple guides: quickstart, authentication, webhooks
   - Rich schema definitions: User, Product, Order, etc.
+
+- **uikit** - UI component library (component kind members)
+  - Components: Button, Card, Modal, Badge
+  - Guide: color-system
+
+- **mycli** - CLI tool (command kind members)
+  - Commands: run, build, ps, stop
+  - Guide: quickstart
+
+- **infra-aws** - Infrastructure/config (resource kind members)
+  - Resources: aws_lambda_function, aws_s3_bucket, aws_iam_role
+  - Guide: getting-started
 
 Tests use `createTestCache()` to set up a temporary cache with fixtures.

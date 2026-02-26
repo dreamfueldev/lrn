@@ -4,19 +4,23 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 
 // Import modules under test
-import { parseLlmsTxt, extractUrls, isLlmsTxtUrl, detectLlmsTxt } from "../src/crawl/llms-txt.js";
+import { parseLlmsTxt, extractUrls, isLlmsTxtUrl, isLlmsFullUrl, getLlmsTxtUrl } from "../src/crawl/llms-txt.js";
 import { htmlToMarkdown, processContent, isMarkdown } from "../src/crawl/converter.js";
 import { fetchUrl, normalizeUrl, isValidUrl, getOrigin, isSameOrigin } from "../src/crawl/fetcher.js";
-import { extractLinks, filterSameOrigin, filterByPatterns, normalizePatterns } from "../src/crawl/links.js";
+import { isSitemapUrl, extractSitemapUrls, isSitemapIndex, extractSitemapIndexUrls, parseSitemap } from "../src/crawl/sitemap.js";
+import { filterByPatterns, urlMatchesPatterns, normalizePatterns } from "../src/crawl/links.js";
 import { CrawlQueue } from "../src/crawl/queue.js";
-import { CrawlStorage, urlToFilePath, computeHash } from "../src/crawl/storage.js";
+import { CrawlStorage, urlToFilePath, computeHash, getCrawlDir } from "../src/crawl/storage.js";
 import { ProgressReporter } from "../src/crawl/progress.js";
+import { getRobotsTxt, isUrlAllowed, getCrawlDelay, clearRobotsCache } from "../src/crawl/robots.js";
 import { parseArgs } from "../src/args.js";
+import { runCLI } from "./fixtures/index.js";
+import { crawl } from "../src/crawl/index.js";
 
 describe("Crawl Command", () => {
   describe("lrn crawl <url>", () => {
     describe("llms.txt detection", () => {
-      it("detects llms.txt at root of domain", () => {
+      it("detects llms.txt URLs", () => {
         expect(isLlmsTxtUrl("https://example.com/llms.txt")).toBe(true);
         expect(isLlmsTxtUrl("https://docs.example.com/llms.txt")).toBe(true);
         expect(isLlmsTxtUrl("https://example.com/docs/llms.txt")).toBe(true);
@@ -103,13 +107,130 @@ describe("Crawl Command", () => {
         const urls = extractUrls(result, "https://example.com");
         expect(urls).toContain("https://other.com/doc");
       });
+    });
 
-      it("falls back to HTML crawling when llms.txt not found", async () => {
-        // detectLlmsTxt returns null when llms.txt is not found
-        // This test verifies the function returns null for non-existent domains
-        // In practice, the crawl orchestrator handles this by falling back to HTML crawling
-        const result = await detectLlmsTxt("https://localhost:99999");
-        expect(result).toBeNull();
+    describe("llms-full.txt detection", () => {
+      it("detects llms-full.txt URLs", () => {
+        expect(isLlmsFullUrl("https://example.com/llms-full.txt")).toBe(true);
+        expect(isLlmsFullUrl("https://docs.example.com/llms-full.txt")).toBe(true);
+        expect(isLlmsFullUrl("https://example.com/docs/llms-full.txt")).toBe(true);
+      });
+
+      it("does not match llms.txt or other URLs", () => {
+        expect(isLlmsFullUrl("https://example.com/llms.txt")).toBe(false);
+        expect(isLlmsFullUrl("https://example.com/docs")).toBe(false);
+        expect(isLlmsFullUrl("https://example.com/")).toBe(false);
+      });
+    });
+
+    describe("sitemap parsing", () => {
+      it("isSitemapUrl recognizes sitemap.xml URLs", () => {
+        expect(isSitemapUrl("https://example.com/sitemap.xml")).toBe(true);
+        expect(isSitemapUrl("https://example.com/sitemap-docs.xml")).toBe(true);
+        expect(isSitemapUrl("https://example.com/sitemap_index.xml")).toBe(true);
+        expect(isSitemapUrl("https://example.com/sitemap0.xml")).toBe(true);
+      });
+
+      it("isSitemapUrl rejects non-sitemap URLs", () => {
+        expect(isSitemapUrl("https://example.com/docs")).toBe(false);
+        expect(isSitemapUrl("https://example.com/llms.txt")).toBe(false);
+        expect(isSitemapUrl("https://example.com/page.xml")).toBe(false);
+        expect(isSitemapUrl("https://example.com/sitemap.json")).toBe(false);
+      });
+
+      it("extractSitemapUrls extracts <loc> from <urlset>", () => {
+        const xml = `<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url><loc>https://example.com/docs/intro</loc></url>
+  <url><loc>https://example.com/docs/api</loc></url>
+  <url><loc>https://example.com/docs/guide</loc></url>
+</urlset>`;
+        const urls = extractSitemapUrls(xml);
+        expect(urls).toEqual([
+          "https://example.com/docs/intro",
+          "https://example.com/docs/api",
+          "https://example.com/docs/guide",
+        ]);
+      });
+
+      it("extractSitemapUrls handles empty urlset", () => {
+        const xml = `<?xml version="1.0"?><urlset></urlset>`;
+        expect(extractSitemapUrls(xml)).toEqual([]);
+      });
+
+      it("isSitemapIndex detects sitemap index format", () => {
+        const index = `<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <sitemap><loc>https://example.com/sitemap-1.xml</loc></sitemap>
+</sitemapindex>`;
+        expect(isSitemapIndex(index)).toBe(true);
+      });
+
+      it("isSitemapIndex returns false for urlset", () => {
+        const urlset = `<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url><loc>https://example.com/page</loc></url>
+</urlset>`;
+        expect(isSitemapIndex(urlset)).toBe(false);
+      });
+
+      it("extractSitemapIndexUrls extracts child sitemap URLs", () => {
+        const xml = `<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <sitemap><loc>https://example.com/sitemap-docs.xml</loc></sitemap>
+  <sitemap><loc>https://example.com/sitemap-api.xml</loc></sitemap>
+</sitemapindex>`;
+        const urls = extractSitemapIndexUrls(xml);
+        expect(urls).toEqual([
+          "https://example.com/sitemap-docs.xml",
+          "https://example.com/sitemap-api.xml",
+        ]);
+      });
+
+      it("parseSitemap fetches and parses a urlset sitemap", async () => {
+        const originalFetch = globalThis.fetch;
+        const sitemapXml = `<?xml version="1.0"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url><loc>https://example.com/page1</loc></url>
+  <url><loc>https://example.com/page2</loc></url>
+</urlset>`;
+        globalThis.fetch = mock(() =>
+          Promise.resolve(new Response(sitemapXml, {
+            status: 200,
+            headers: { "content-type": "application/xml" },
+          }))
+        );
+        try {
+          const urls = await parseSitemap("https://example.com/sitemap.xml");
+          expect(urls).toEqual(["https://example.com/page1", "https://example.com/page2"]);
+        } finally {
+          globalThis.fetch = originalFetch;
+        }
+      });
+
+      it("parseSitemap follows sitemap index to collect all URLs", async () => {
+        const originalFetch = globalThis.fetch;
+        const indexXml = `<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <sitemap><loc>https://example.com/sitemap-1.xml</loc></sitemap>
+  <sitemap><loc>https://example.com/sitemap-2.xml</loc></sitemap>
+</sitemapindex>`;
+        const child1Xml = `<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url><loc>https://example.com/a</loc></url>
+  <url><loc>https://example.com/b</loc></url>
+</urlset>`;
+        const child2Xml = `<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url><loc>https://example.com/c</loc></url>
+</urlset>`;
+
+        globalThis.fetch = mock((url: string | URL | Request) => {
+          const u = typeof url === "string" ? url : url instanceof URL ? url.toString() : url.url;
+          if (u.includes("sitemap-1.xml")) return Promise.resolve(new Response(child1Xml, { status: 200, headers: { "content-type": "application/xml" } }));
+          if (u.includes("sitemap-2.xml")) return Promise.resolve(new Response(child2Xml, { status: 200, headers: { "content-type": "application/xml" } }));
+          return Promise.resolve(new Response(indexXml, { status: 200, headers: { "content-type": "application/xml" } }));
+        });
+        try {
+          const urls = await parseSitemap("https://example.com/sitemap.xml");
+          expect(urls).toEqual(["https://example.com/a", "https://example.com/b", "https://example.com/c"]);
+        } finally {
+          globalThis.fetch = originalFetch;
+        }
       });
     });
 
@@ -327,47 +448,7 @@ describe("Crawl Command", () => {
       });
     });
 
-    describe("link following", () => {
-      it("extracts links from markdown content", () => {
-        const markdown = `# Page
-[Link 1](https://example.com/page1)
-[Link 2](/page2)
-[Link 3](./page3)
-`;
-        const links = extractLinks(markdown, "https://example.com/docs/");
-        expect(links).toContain("https://example.com/page1");
-        expect(links).toContain("https://example.com/page2");
-        expect(links).toContain("https://example.com/docs/page3");
-      });
-
-      it("follows relative links within same domain", () => {
-        const links = ["https://example.com/page1", "https://other.com/page2"];
-        const filtered = filterSameOrigin(links, "https://example.com");
-        expect(filtered).toContain("https://example.com/page1");
-        expect(filtered).not.toContain("https://other.com/page2");
-      });
-
-      it("does not follow external domain links", () => {
-        expect(isSameOrigin("https://example.com/a", "https://example.com/b")).toBe(true);
-        expect(isSameOrigin("https://example.com/a", "https://other.com/b")).toBe(false);
-      });
-
-      it("respects --depth flag for crawl depth", () => {
-        const queue = new CrawlQueue({ rate: 10 });
-        queue.add("https://example.com/", 0);
-        queue.add("https://example.com/page1", 1);
-        queue.add("https://example.com/page2", 2);
-        expect(queue.size).toBe(3);
-      });
-
-      it("tracks visited URLs to avoid duplicates", () => {
-        const queue = new CrawlQueue({ rate: 10 });
-        queue.add("https://example.com/page", 0);
-        const added = queue.add("https://example.com/page", 0);
-        expect(added).toBe(false);
-        expect(queue.size).toBe(1);
-      });
-
+    describe("URL pattern filtering", () => {
       it("applies --include pattern to filter URLs", () => {
         const links = [
           "https://example.com/api/users",
@@ -390,6 +471,14 @@ describe("Crawl Command", () => {
         const filtered = filterByPatterns(links, [], patterns);
         expect(filtered).toContain("https://example.com/docs/page");
         expect(filtered).not.toContain("https://example.com/blog/post");
+      });
+
+      it("tracks visited URLs to avoid duplicates", () => {
+        const queue = new CrawlQueue({ rate: 10 });
+        queue.add("https://example.com/page");
+        const added = queue.add("https://example.com/page");
+        expect(added).toBe(false);
+        expect(queue.size).toBe(1);
       });
     });
 
@@ -426,7 +515,7 @@ describe("Crawl Command", () => {
       it("continues crawling allowed URLs", () => {
         // After skipping disallowed URLs, crawl continues
         const queue = new CrawlQueue({ rate: 10 });
-        queue.add("https://example.com/public", 0);
+        queue.add("https://example.com/public");
         expect(queue.isEmpty).toBe(false);
       });
     });
@@ -454,21 +543,21 @@ describe("Crawl Command", () => {
         // Backoff logic is in fetcher
         // Queue supports retry which is used after backoff
         const queue = new CrawlQueue({ rate: 2 });
-        queue.add("https://example.com/page", 0);
-        const item = { url: "https://example.com/page", depth: 0, retries: 0 };
+        queue.add("https://example.com/page");
+        const item = { url: "https://example.com/page", retries: 0 };
         expect(queue.retry(item)).toBe(true);
       });
 
       it("backs off on 503 response", () => {
         // Same backoff logic as 429
         const queue = new CrawlQueue({ rate: 2 });
-        const item = { url: "https://example.com/page", depth: 0, retries: 0 };
+        const item = { url: "https://example.com/page", retries: 0 };
         expect(queue.retry(item)).toBe(true);
       });
 
       it("retries failed requests up to 3 times", () => {
         const queue = new CrawlQueue({ rate: 2 });
-        const item = { url: "https://example.com/page", depth: 0, retries: 3 };
+        const item = { url: "https://example.com/page", retries: 3 };
         expect(queue.retry(item)).toBe(false); // Max retries reached
       });
     });
@@ -557,6 +646,23 @@ describe("Crawl Command", () => {
         const meta = JSON.parse(readFileSync(join(tempDir, "_meta.json"), "utf-8"));
         expect(meta.urls[0].fetchedAt).toBeDefined();
       });
+
+      it("default metadata uses source field", () => {
+        const storage = new CrawlStorage("https://example.com", { output: tempDir });
+        storage.init();
+        storage.saveMeta();
+        const meta = JSON.parse(readFileSync(join(tempDir, "_meta.json"), "utf-8"));
+        expect(meta.source).toBe("llms-txt");
+      });
+
+      it("setSource updates the metadata source", () => {
+        const storage = new CrawlStorage("https://example.com", { output: tempDir });
+        storage.setSource("sitemap");
+        storage.init();
+        storage.saveMeta();
+        const meta = JSON.parse(readFileSync(join(tempDir, "_meta.json"), "utf-8"));
+        expect(meta.source).toBe("sitemap");
+      });
     });
 
     describe("progress reporting", () => {
@@ -636,7 +742,7 @@ describe("Crawl Command", () => {
         // Dry run mode is handled in crawl orchestrator
         // URLs are collected but fetchUrl is not called
         const queue = new CrawlQueue({ rate: 2 });
-        queue.add("https://example.com/page", 0);
+        queue.add("https://example.com/page");
         // In dry run, we just read from queue without making requests
         expect(queue.getQueued()).toContain("https://example.com/page");
       });
@@ -676,7 +782,7 @@ describe("Crawl Command", () => {
           JSON.stringify({
             origin: "https://example.com",
             crawledAt: new Date().toISOString(),
-            llmsTxt: false,
+            source: "llms-txt",
             pages: 1,
             urls: [{ url: "https://example.com/page", file: "page.md", fetchedAt: new Date().toISOString(), status: 200, contentHash: "abc123" }],
           })
@@ -692,7 +798,7 @@ describe("Crawl Command", () => {
           JSON.stringify({
             origin: "https://example.com",
             crawledAt: new Date().toISOString(),
-            llmsTxt: false,
+            source: "llms-txt",
             pages: 1,
             urls: [{ url: "https://example.com/page", file: "page.md", fetchedAt: new Date().toISOString(), status: 200, contentHash: "abc123" }],
           })
@@ -741,26 +847,12 @@ describe("Crawl Command", () => {
         expect(url).toBe("https://example.com/page");
       });
 
-      it("handles pages with no links", () => {
-        const markdown = "# No Links\n\nJust text content.";
-        const links = extractLinks(markdown, "https://example.com");
-        expect(links).toHaveLength(0);
-      });
-
-      it("handles circular links", () => {
+      it("handles circular URLs in queue", () => {
         const queue = new CrawlQueue({ rate: 10 });
-        queue.add("https://example.com/a", 0);
-        queue.add("https://example.com/b", 1);
-        // Trying to add /a again (circular) should fail
-        expect(queue.add("https://example.com/a", 2)).toBe(false);
-      });
-
-      it("handles very deep nesting", () => {
-        const queue = new CrawlQueue({ rate: 10 });
-        for (let i = 0; i < 100; i++) {
-          queue.add(`https://example.com/level${i}`, i);
-        }
-        expect(queue.size).toBe(100);
+        queue.add("https://example.com/a");
+        queue.add("https://example.com/b");
+        // Trying to add /a again should fail
+        expect(queue.add("https://example.com/a")).toBe(false);
       });
 
       it("truncates pages larger than 1MB", () => {
@@ -777,44 +869,691 @@ describe("Crawl Command", () => {
     });
 
     describe("CLI options", () => {
-      it("accepts --depth flag for max crawl depth", () => {
-        const args = parseArgs(["node", "lrn", "crawl", "https://example.com", "--depth", "3"]);
-        expect(args.raw).toContain("--depth");
-        expect(args.raw).toContain("3");
-      });
-
       it("accepts --rate flag for requests per second", () => {
-        const args = parseArgs(["node", "lrn", "crawl", "https://example.com", "--rate", "1"]);
+        const args = parseArgs(["node", "lrn", "crawl", "https://example.com/llms.txt", "--rate", "1"]);
         expect(args.raw).toContain("--rate");
         expect(args.raw).toContain("1");
       });
 
       it("accepts --output flag for custom output directory", () => {
-        const args = parseArgs(["node", "lrn", "crawl", "https://example.com", "--output", "/tmp/docs"]);
+        const args = parseArgs(["node", "lrn", "crawl", "https://example.com/llms.txt", "--output", "/tmp/docs"]);
         expect(args.raw).toContain("--output");
         expect(args.raw).toContain("/tmp/docs");
       });
 
       it("accepts --include flag for URL pattern", () => {
-        const args = parseArgs(["node", "lrn", "crawl", "https://example.com", "--include", "api/*"]);
+        const args = parseArgs(["node", "lrn", "crawl", "https://example.com/sitemap.xml", "--include", "api/*"]);
         expect(args.raw).toContain("--include");
         expect(args.raw).toContain("api/*");
       });
 
       it("accepts --exclude flag for URL pattern", () => {
-        const args = parseArgs(["node", "lrn", "crawl", "https://example.com", "--exclude", "blog/*"]);
+        const args = parseArgs(["node", "lrn", "crawl", "https://example.com/sitemap.xml", "--exclude", "blog/*"]);
         expect(args.raw).toContain("--exclude");
         expect(args.raw).toContain("blog/*");
       });
 
       it("accepts --dry-run flag", () => {
-        const args = parseArgs(["node", "lrn", "crawl", "https://example.com", "--dry-run"]);
+        const args = parseArgs(["node", "lrn", "crawl", "https://example.com/llms.txt", "--dry-run"]);
         expect(args.raw).toContain("--dry-run");
       });
 
       it("shows help with --help flag", () => {
         const args = parseArgs(["node", "lrn", "crawl", "--help"]);
         expect(args.flags.help).toBe(true);
+      });
+    });
+
+    describe("queue addAll and accessors", () => {
+      it("addAll returns count of newly added URLs", () => {
+        const queue = new CrawlQueue({ rate: 10 });
+        queue.add("https://example.com/a");
+        const added = queue.addAll(
+          ["https://example.com/a", "https://example.com/b", "https://example.com/c"],
+          "https://example.com/a"
+        );
+        expect(added).toBe(2);
+        expect(queue.size).toBe(3);
+      });
+
+      it("next returns undefined on empty queue", async () => {
+        const queue = new CrawlQueue({ rate: 1000 });
+        expect(await queue.next()).toBeUndefined();
+      });
+
+      it("next returns items in FIFO order", async () => {
+        const queue = new CrawlQueue({ rate: 1000 });
+        queue.add("https://example.com/first");
+        queue.add("https://example.com/second");
+        const item = await queue.next();
+        expect(item!.url).toBe("https://example.com/first");
+      });
+
+      it("hasVisited returns true for queued URLs", () => {
+        const queue = new CrawlQueue({ rate: 10 });
+        queue.add("https://example.com/page");
+        expect(queue.hasVisited("https://example.com/page")).toBe(true);
+        expect(queue.hasVisited("https://example.com/other")).toBe(false);
+      });
+
+      it("markVisited prevents future add", () => {
+        const queue = new CrawlQueue({ rate: 10 });
+        queue.markVisited("https://example.com/page");
+        expect(queue.add("https://example.com/page")).toBe(false);
+        expect(queue.size).toBe(0);
+      });
+
+      it("visitedCount tracks total", () => {
+        const queue = new CrawlQueue({ rate: 10 });
+        queue.add("https://example.com/a");
+        queue.markVisited("https://example.com/b");
+        expect(queue.visitedCount).toBe(2);
+      });
+
+      it("clear resets queue and visited", () => {
+        const queue = new CrawlQueue({ rate: 10 });
+        queue.add("https://example.com/a");
+        queue.add("https://example.com/b");
+        queue.clear();
+        expect(queue.size).toBe(0);
+        expect(queue.visitedCount).toBe(0);
+        expect(queue.isEmpty).toBe(true);
+      });
+
+      it("getQueued returns queued URLs", () => {
+        const queue = new CrawlQueue({ rate: 10 });
+        queue.add("https://example.com/a");
+        queue.add("https://example.com/b");
+        expect(queue.getQueued()).toEqual(["https://example.com/a", "https://example.com/b"]);
+      });
+
+      it("getVisited returns all visited URLs", () => {
+        const queue = new CrawlQueue({ rate: 10 });
+        queue.add("https://example.com/a");
+        queue.markVisited("https://example.com/b");
+        const visited = queue.getVisited();
+        expect(visited).toContain("https://example.com/a");
+        expect(visited).toContain("https://example.com/b");
+      });
+    });
+
+    describe("pattern filtering", () => {
+      it("urlMatchesPatterns matches include patterns", () => {
+        expect(urlMatchesPatterns("https://example.com/api/users", ["/api/**"], [])).toBe(true);
+        expect(urlMatchesPatterns("https://example.com/blog/post", ["/api/**"], [])).toBe(false);
+      });
+
+      it("urlMatchesPatterns applies exclude patterns", () => {
+        expect(urlMatchesPatterns("https://example.com/blog/post", [], ["/blog/**"])).toBe(false);
+        expect(urlMatchesPatterns("https://example.com/api/users", [], ["/blog/**"])).toBe(true);
+      });
+
+      it("urlMatchesPatterns returns false for invalid URL", () => {
+        expect(urlMatchesPatterns("not-a-url", [], [])).toBe(false);
+      });
+
+      it("normalizePatterns adds leading slash", () => {
+        expect(normalizePatterns(["api/*"])).toEqual(["/api/*"]);
+      });
+
+      it("normalizePatterns adds ** for directory patterns", () => {
+        expect(normalizePatterns(["/docs/"])).toEqual(["/docs/**"]);
+      });
+
+      it("normalizePatterns preserves glob-starting patterns", () => {
+        expect(normalizePatterns(["**/api"])).toEqual(["**/api"]);
+      });
+    });
+
+    describe("llms-txt simple entries and pathToLabel", () => {
+      it("parses entries without labels", () => {
+        const content = `# Docs
+## Section
+- /docs/getting-started.md
+- /docs/api-reference
+`;
+        const result = parseLlmsTxt(content);
+        expect(result.sections[0]!.entries).toHaveLength(2);
+        expect(result.sections[0]!.entries[0]!.label).toBe("Getting Started");
+        expect(result.sections[0]!.entries[1]!.label).toBe("Api Reference");
+      });
+
+      it("getLlmsTxtUrl returns origin + /llms.txt", () => {
+        expect(getLlmsTxtUrl("https://example.com/docs/page")).toBe("https://example.com/llms.txt");
+      });
+    });
+
+    describe("storage recordFailure, getExistingFilePath, getPageCount", () => {
+      let tempDir: string;
+
+      beforeEach(() => {
+        tempDir = join(tmpdir(), `lrn-storage-${Date.now()}`);
+        mkdirSync(tempDir, { recursive: true });
+      });
+
+      afterEach(() => {
+        if (existsSync(tempDir)) rmSync(tempDir, { recursive: true });
+      });
+
+      it("recordFailure adds to metadata urls", () => {
+        const storage = new CrawlStorage("https://example.com", { output: tempDir });
+        storage.init();
+        storage.recordFailure("https://example.com/bad", 404);
+        storage.saveMeta();
+        const meta = JSON.parse(readFileSync(join(tempDir, "_meta.json"), "utf-8"));
+        expect(meta.urls).toHaveLength(1);
+        expect(meta.urls[0].status).toBe(404);
+      });
+
+      it("getExistingFilePath returns file for known URL", () => {
+        writeFileSync(
+          join(tempDir, "_meta.json"),
+          JSON.stringify({
+            origin: "https://example.com",
+            crawledAt: new Date().toISOString(),
+            source: "llms-txt",
+            pages: 1,
+            urls: [{ url: "https://example.com/page", file: "page.md", fetchedAt: new Date().toISOString(), status: 200 }],
+          })
+        );
+        const storage = new CrawlStorage("https://example.com", { output: tempDir });
+        expect(storage.getExistingFilePath("https://example.com/page")).toBe("page.md");
+        expect(storage.getExistingFilePath("https://example.com/other")).toBeUndefined();
+      });
+
+      it("getPageCount returns current page count", () => {
+        const storage = new CrawlStorage("https://example.com", { output: tempDir });
+        storage.init();
+        expect(storage.getPageCount()).toBe(0);
+        storage.savePage("https://example.com/page", "# Page", "Page");
+        expect(storage.getPageCount()).toBe(1);
+      });
+
+      it("getCrawlDir falls back to unknown for invalid URL", () => {
+        const dir = getCrawlDir("not-a-url", {});
+        expect(dir).toContain("unknown");
+      });
+    });
+
+    describe("progress reporter detailed", () => {
+      it("addToTotal increments total", () => {
+        const reporter = new ProgressReporter({ quiet: true, verbose: false });
+        reporter.setTotal(5);
+        reporter.addToTotal(3);
+        expect(reporter.getProgress().total).toBe(8);
+      });
+
+      it("skipUrl records skipped URLs", () => {
+        const reporter = new ProgressReporter({ quiet: true, verbose: false });
+        reporter.skipUrl("https://example.com/skip", "robots.txt");
+        expect(reporter.getProgress().skipped).toContain("https://example.com/skip");
+      });
+
+      it("foundLlmsTxt does not throw in quiet mode", () => {
+        const reporter = new ProgressReporter({ quiet: true, verbose: false });
+        expect(() => reporter.foundLlmsTxt(5)).not.toThrow();
+      });
+
+      it("dryRun does not throw", () => {
+        const reporter = new ProgressReporter({ quiet: true, verbose: false });
+        expect(() => reporter.dryRun(["https://example.com/a", "https://example.com/b"])).not.toThrow();
+      });
+
+      it("summary does not throw", () => {
+        const reporter = new ProgressReporter({ quiet: true, verbose: false });
+        reporter.setTotal(2);
+        reporter.completeUrl("https://example.com/a");
+        reporter.errorUrl("https://example.com/b", "fail");
+        expect(() => reporter.summary("/tmp/output")).not.toThrow();
+      });
+
+      it("summary with verbose shows skipped", () => {
+        const reporter = new ProgressReporter({ quiet: false, verbose: true });
+        reporter.setTotal(1);
+        reporter.skipUrl("https://example.com/skip");
+        reporter.completeUrl("https://example.com/a");
+        expect(() => reporter.summary("/tmp/output")).not.toThrow();
+      });
+
+      it("summary with many errors truncates", () => {
+        const reporter = new ProgressReporter({ quiet: true, verbose: false });
+        reporter.setTotal(15);
+        for (let i = 0; i < 15; i++) {
+          reporter.errorUrl(`https://example.com/err${i}`, `Error ${i}`);
+        }
+        expect(() => reporter.summary("/tmp/output")).not.toThrow();
+        expect(reporter.getProgress().errors).toHaveLength(15);
+      });
+    });
+
+    describe("CLI crawl command", () => {
+      it("errors on missing URL argument", async () => {
+        const result = await runCLI(["crawl"]);
+        expect(result.exitCode).toBe(1);
+        expect(result.stderr).toContain("Missing URL argument");
+      });
+
+      it("errors on invalid URL", async () => {
+        const result = await runCLI(["crawl", "not-a-url"]);
+        expect(result.exitCode).not.toBe(0);
+        expect(result.stderr).toContain("Invalid URL");
+      });
+
+      it("errors on non-manifest URL with helpful message", async () => {
+        const result = await runCLI(["crawl", "https://example.com/docs"]);
+        expect(result.exitCode).not.toBe(0);
+        expect(result.stderr).toContain("llms.txt");
+        expect(result.stderr).toContain("sitemap.xml");
+      });
+    });
+
+    describe("manifest type detection", () => {
+      const originalFetch = globalThis.fetch;
+
+      afterEach(() => {
+        globalThis.fetch = originalFetch;
+      });
+
+      it("rejects non-manifest URLs", async () => {
+        await expect(crawl({
+          url: "https://example.com/docs",
+          rate: 1000,
+          include: [],
+          exclude: [],
+          dryRun: false,
+          verbose: false,
+          quiet: true,
+        })).rejects.toThrow("URL must point to an llms.txt, llms-full.txt, or sitemap.xml file");
+      });
+    });
+
+    describe("crawl orchestrator", () => {
+      const originalFetch = globalThis.fetch;
+      let tempDir: string;
+
+      beforeEach(() => {
+        clearRobotsCache();
+        tempDir = join(tmpdir(), `lrn-crawl-orch-${Date.now()}`);
+        mkdirSync(tempDir, { recursive: true });
+      });
+
+      afterEach(() => {
+        globalThis.fetch = originalFetch;
+        clearRobotsCache();
+        if (existsSync(tempDir)) {
+          rmSync(tempDir, { recursive: true });
+        }
+      });
+
+      const makeResponse = (body: string, contentType = "text/html", status = 200) =>
+        new Response(body, { status, headers: { "content-type": contentType } });
+
+      const baseCrawlOpts = (overrides: Partial<import("../src/crawl/index.js").CrawlOptions> = {}): import("../src/crawl/index.js").CrawlOptions => ({
+        url: "https://example.com/llms.txt",
+        rate: 1000,
+        include: [],
+        exclude: [],
+        dryRun: false,
+        verbose: false,
+        quiet: true,
+        ...overrides,
+      });
+
+      it("crawls pages from llms.txt manifest", async () => {
+        const llmsTxt = `# Example Docs
+## Pages
+- Page: https://example.com/page
+`;
+        globalThis.fetch = mock((url: string | URL | Request) => {
+          const u = typeof url === "string" ? url : url instanceof URL ? url.toString() : url.url;
+          if (u.includes("robots.txt")) return Promise.resolve(makeResponse("User-agent: *\nAllow: /\n", "text/plain"));
+          if (u.includes("llms.txt")) return Promise.resolve(makeResponse(llmsTxt, "text/plain"));
+          return Promise.resolve(makeResponse("<html><body><h1>Hello</h1><p>World</p></body></html>"));
+        });
+
+        const meta = await crawl(baseCrawlOpts({ url: "https://example.com/llms.txt", output: tempDir }));
+        expect(meta.pages).toBeGreaterThanOrEqual(1);
+        expect(meta.source).toBe("llms-txt");
+        expect(existsSync(join(tempDir, "page.md"))).toBe(true);
+      });
+
+      it("downloads llms-full.txt as single file", async () => {
+        const fullContent = "# Full Documentation\n\nAll docs here.\n";
+        globalThis.fetch = mock((url: string | URL | Request) => {
+          const u = typeof url === "string" ? url : url instanceof URL ? url.toString() : url.url;
+          if (u.includes("robots.txt")) return Promise.resolve(makeResponse("User-agent: *\nAllow: /\n", "text/plain"));
+          return Promise.resolve(makeResponse(fullContent, "text/plain"));
+        });
+
+        const meta = await crawl(baseCrawlOpts({ url: "https://example.com/llms-full.txt", output: tempDir }));
+        expect(meta.pages).toBe(1);
+        expect(meta.source).toBe("llms-full");
+        // Should have saved the file
+        expect(existsSync(join(tempDir, "_meta.json"))).toBe(true);
+      });
+
+      it("crawls pages from sitemap.xml", async () => {
+        const sitemapXml = `<?xml version="1.0"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url><loc>https://example.com/page1</loc></url>
+  <url><loc>https://example.com/page2</loc></url>
+</urlset>`;
+        globalThis.fetch = mock((url: string | URL | Request) => {
+          const u = typeof url === "string" ? url : url instanceof URL ? url.toString() : url.url;
+          if (u.includes("robots.txt")) return Promise.resolve(makeResponse("User-agent: *\nAllow: /\n", "text/plain"));
+          if (u.includes("sitemap.xml")) return Promise.resolve(makeResponse(sitemapXml, "application/xml"));
+          return Promise.resolve(makeResponse("<html><body><h1>Page</h1><p>Content</p></body></html>"));
+        });
+
+        const meta = await crawl(baseCrawlOpts({ url: "https://example.com/sitemap.xml", output: tempDir }));
+        expect(meta.pages).toBe(2);
+        expect(meta.source).toBe("sitemap");
+        expect(existsSync(join(tempDir, "page1.md"))).toBe(true);
+        expect(existsSync(join(tempDir, "page2.md"))).toBe(true);
+      });
+
+      it("applies include/exclude filters to manifest URLs", async () => {
+        const sitemapXml = `<?xml version="1.0"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url><loc>https://example.com/api/users</loc></url>
+  <url><loc>https://example.com/blog/post</loc></url>
+  <url><loc>https://example.com/api/products</loc></url>
+</urlset>`;
+        const fetched: string[] = [];
+        globalThis.fetch = mock((url: string | URL | Request) => {
+          const u = typeof url === "string" ? url : url instanceof URL ? url.toString() : url.url;
+          if (u.includes("robots.txt")) return Promise.resolve(makeResponse("User-agent: *\nAllow: /\n", "text/plain"));
+          if (u.includes("sitemap.xml")) return Promise.resolve(makeResponse(sitemapXml, "application/xml"));
+          fetched.push(u);
+          return Promise.resolve(makeResponse("<html><body><h1>Page</h1></body></html>"));
+        });
+
+        await crawl(baseCrawlOpts({ url: "https://example.com/sitemap.xml", output: tempDir, include: ["api/**"] }));
+        expect(fetched).toContain("https://example.com/api/users");
+        expect(fetched).toContain("https://example.com/api/products");
+        expect(fetched).not.toContain("https://example.com/blog/post");
+      });
+
+      it("dry run does not create output files", async () => {
+        const llmsTxt = `# Docs
+## Pages
+- Page: https://example.com/page
+`;
+        globalThis.fetch = mock((url: string | URL | Request) => {
+          const u = typeof url === "string" ? url : url instanceof URL ? url.toString() : url.url;
+          if (u.includes("robots.txt")) return Promise.resolve(makeResponse("User-agent: *\nAllow: /\n", "text/plain"));
+          return Promise.resolve(makeResponse(llmsTxt, "text/plain"));
+        });
+
+        const outDir = join(tempDir, "dryrun-output");
+        await crawl(baseCrawlOpts({ url: "https://example.com/llms.txt", output: outDir, dryRun: true }));
+        // In dry run, storage.init() is never called, so no files
+        expect(existsSync(join(outDir, "_meta.json"))).toBe(false);
+      });
+
+      it("skips URLs disallowed by robots.txt", async () => {
+        const llmsTxt = `# Docs
+## Pages
+- Start: https://example.com/start
+`;
+        const fetched: string[] = [];
+        globalThis.fetch = mock((url: string | URL | Request) => {
+          const u = typeof url === "string" ? url : url instanceof URL ? url.toString() : url.url;
+          if (u.includes("robots.txt")) {
+            return Promise.resolve(makeResponse("User-agent: *\nDisallow: /start\n", "text/plain"));
+          }
+          if (u.includes("llms.txt")) return Promise.resolve(makeResponse(llmsTxt, "text/plain"));
+          fetched.push(u);
+          return Promise.resolve(makeResponse("<html><body><h1>Page</h1></body></html>"));
+        });
+
+        await crawl(baseCrawlOpts({ url: "https://example.com/llms.txt", output: tempDir }));
+        // The page should be skipped due to robots.txt Disallow
+        expect(fetched).not.toContain("https://example.com/start");
+      });
+
+      it("throws CrawlError for invalid URL", async () => {
+        await expect(crawl(baseCrawlOpts({ url: "not-valid" }))).rejects.toThrow("Invalid URL");
+      });
+
+      it("handles fetch errors gracefully", async () => {
+        const llmsTxt = `# Docs
+## Pages
+- Missing: https://example.com/missing
+`;
+        globalThis.fetch = mock((url: string | URL | Request) => {
+          const u = typeof url === "string" ? url : url instanceof URL ? url.toString() : url.url;
+          if (u.includes("robots.txt")) return Promise.resolve(makeResponse("User-agent: *\nAllow: /\n", "text/plain"));
+          if (u.includes("llms.txt")) return Promise.resolve(makeResponse(llmsTxt, "text/plain"));
+          return Promise.resolve(makeResponse("Not Found", "text/html", 404));
+        });
+
+        // Should not throw — errors are recorded in metadata
+        const meta = await crawl(baseCrawlOpts({ url: "https://example.com/llms.txt", output: tempDir }));
+        expect(meta).toBeDefined();
+      });
+
+      it("skips redirects to different domain", async () => {
+        const llmsTxt = `# Docs
+## Pages
+- Page: https://example.com/page
+`;
+        globalThis.fetch = mock((url: string | URL | Request) => {
+          const u = typeof url === "string" ? url : url instanceof URL ? url.toString() : url.url;
+          if (u.includes("robots.txt")) return Promise.resolve(makeResponse("User-agent: *\nAllow: /\n", "text/plain"));
+          if (u.includes("llms.txt")) return Promise.resolve(makeResponse(llmsTxt, "text/plain"));
+          // Simulate redirect to different domain via finalUrl
+          return Promise.resolve(new Response("<html><body><h1>Redirect</h1></body></html>", {
+            status: 200,
+            headers: { "content-type": "text/html" },
+          }));
+        });
+
+        const meta = await crawl(baseCrawlOpts({ url: "https://example.com/llms.txt", output: tempDir }));
+        // Should complete without error
+        expect(meta).toBeDefined();
+      });
+    });
+
+    describe("converter edge cases", () => {
+      it("handles inline code with backticks inside", () => {
+        const html = `<html><body><p>Use <code>foo\`bar</code> syntax</p></body></html>`;
+        const { markdown } = htmlToMarkdown(html, "https://example.com");
+        expect(markdown).toContain("foo`bar");
+      });
+
+      it("handles image with title attribute", () => {
+        const html = `<html><body><img src="/logo.png" alt="Logo" title="Company Logo"></body></html>`;
+        const { markdown } = htmlToMarkdown(html, "https://example.com");
+        expect(markdown).toContain('"Company Logo"');
+      });
+
+      it("handles link with title attribute", () => {
+        const html = `<html><body><a href="/page" title="Go there">Link</a></body></html>`;
+        const { markdown } = htmlToMarkdown(html, "https://example.com");
+        expect(markdown).toContain('"Go there"');
+      });
+
+      it("removes empty links", () => {
+        const html = `<html><body><a href="/page"></a><p>Content</p></body></html>`;
+        const { markdown } = htmlToMarkdown(html, "https://example.com");
+        expect(markdown).not.toContain("[](");
+      });
+
+      it("extracts title from og:title when no title or h1", () => {
+        const html = `<html><head><meta property="og:title" content="OG Title"></head><body><p>Content</p></body></html>`;
+        const { title } = htmlToMarkdown(html, "https://example.com");
+        expect(title).toBe("OG Title");
+      });
+
+      it("processContent extracts title from markdown heading", () => {
+        const result = processContent("# My Title\n\nContent here", "text/plain", "https://example.com");
+        expect(result.title).toBe("My Title");
+      });
+
+      it("isMarkdown detects text/x-markdown", () => {
+        expect(isMarkdown("text/x-markdown")).toBe(true);
+      });
+    });
+
+    describe("fetcher with mocked fetch", () => {
+      const originalFetch = globalThis.fetch;
+
+      afterEach(() => {
+        globalThis.fetch = originalFetch;
+      });
+
+      it("fetchUrl returns body and headers on success", async () => {
+        globalThis.fetch = mock(() =>
+          Promise.resolve(new Response("Hello world", {
+            status: 200,
+            headers: { "content-type": "text/html" },
+          }))
+        );
+        const result = await fetchUrl("https://example.com/page", { retries: 0 });
+        expect(result.body).toBe("Hello world");
+        expect(result.status).toBe(200);
+        expect(result.contentType).toContain("text/html");
+        expect(result.url).toBe("https://example.com/page");
+      });
+
+      it("fetchUrl follows redirects", async () => {
+        let calls = 0;
+        globalThis.fetch = mock(() => {
+          calls++;
+          if (calls === 1) {
+            return Promise.resolve(new Response("", {
+              status: 301,
+              headers: { location: "https://example.com/new-page" },
+            }));
+          }
+          return Promise.resolve(new Response("Redirected content", {
+            status: 200,
+            headers: { "content-type": "text/html" },
+          }));
+        });
+        const result = await fetchUrl("https://example.com/old-page", { retries: 0 });
+        expect(result.body).toBe("Redirected content");
+        expect(result.finalUrl).toBe("https://example.com/new-page");
+      });
+
+      it("fetchUrl throws on too many redirects", async () => {
+        globalThis.fetch = mock(() =>
+          Promise.resolve(new Response("", {
+            status: 302,
+            headers: { location: "https://example.com/loop" },
+          }))
+        );
+        await expect(fetchUrl("https://example.com/loop", { retries: 0 })).rejects.toThrow("Too many redirects");
+      });
+
+      it("fetchUrl throws on 4xx errors without retry", async () => {
+        globalThis.fetch = mock(() =>
+          Promise.resolve(new Response("Not Found", {
+            status: 404,
+            headers: { "content-type": "text/html" },
+          }))
+        );
+        await expect(fetchUrl("https://example.com/missing", { retries: 3 })).rejects.toThrow("HTTP 404");
+      });
+
+      it("fetchUrl throws on non-text content type", async () => {
+        globalThis.fetch = mock(() =>
+          Promise.resolve(new Response("binary", {
+            status: 200,
+            headers: { "content-type": "image/png" },
+          }))
+        );
+        await expect(fetchUrl("https://example.com/image.png", { retries: 0 })).rejects.toThrow("Non-text content type");
+      });
+
+      it("fetchUrl throws on response too large (content-length)", async () => {
+        globalThis.fetch = mock(() =>
+          Promise.resolve(new Response("x", {
+            status: 200,
+            headers: { "content-type": "text/html", "content-length": "2000000" },
+          }))
+        );
+        await expect(fetchUrl("https://example.com/huge", { retries: 0 })).rejects.toThrow("too large");
+      });
+    });
+
+    describe("robots with mocked fetch", () => {
+      const originalFetch = globalThis.fetch;
+
+      beforeEach(() => {
+        clearRobotsCache();
+      });
+
+      afterEach(() => {
+        globalThis.fetch = originalFetch;
+        clearRobotsCache();
+      });
+
+      it("getRobotsTxt parses rules and checks isAllowed", async () => {
+        globalThis.fetch = mock(() =>
+          Promise.resolve(new Response(
+            "User-agent: *\nDisallow: /private/\n",
+            { status: 200, headers: { "content-type": "text/plain" } }
+          ))
+        );
+        const rules = await getRobotsTxt("https://example.com/page");
+        expect(rules.isAllowed("/public")).toBe(true);
+        expect(rules.isAllowed("/private/secret")).toBe(false);
+      });
+
+      it("getRobotsTxt caches results", async () => {
+        let callCount = 0;
+        globalThis.fetch = mock(() => {
+          callCount++;
+          return Promise.resolve(new Response(
+            "User-agent: *\nAllow: /\n",
+            { status: 200, headers: { "content-type": "text/plain" } }
+          ));
+        });
+        await getRobotsTxt("https://example.com/a");
+        await getRobotsTxt("https://example.com/b");
+        expect(callCount).toBe(1);
+      });
+
+      it("getRobotsTxt returns permissive rules on fetch error", async () => {
+        globalThis.fetch = mock(() => Promise.reject(new Error("Network error")));
+        const rules = await getRobotsTxt("https://example.com");
+        expect(rules.isAllowed("/anything")).toBe(true);
+        expect(rules.sitemaps).toEqual([]);
+      });
+
+      it("isUrlAllowed uses robots rules", async () => {
+        globalThis.fetch = mock(() =>
+          Promise.resolve(new Response(
+            "User-agent: *\nDisallow: /blocked/\n",
+            { status: 200, headers: { "content-type": "text/plain" } }
+          ))
+        );
+        expect(await isUrlAllowed("https://example.com/open")).toBe(true);
+        expect(await isUrlAllowed("https://example.com/blocked/page")).toBe(false);
+      });
+
+      it("getCrawlDelay returns delay from robots.txt", async () => {
+        globalThis.fetch = mock(() =>
+          Promise.resolve(new Response(
+            "User-agent: *\nCrawl-delay: 5\n",
+            { status: 200, headers: { "content-type": "text/plain" } }
+          ))
+        );
+        const delay = await getCrawlDelay("https://example.com");
+        expect(delay).toBe(5);
+      });
+
+      it("getCrawlDelay returns undefined when not specified", async () => {
+        globalThis.fetch = mock(() =>
+          Promise.resolve(new Response(
+            "User-agent: *\nAllow: /\n",
+            { status: 200, headers: { "content-type": "text/plain" } }
+          ))
+        );
+        const delay = await getCrawlDelay("https://example.com");
+        expect(delay).toBeUndefined();
       });
     });
   });

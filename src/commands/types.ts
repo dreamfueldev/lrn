@@ -9,7 +9,7 @@ import type { ResolvedConfig } from "../config.js";
 import { loadPackage } from "../cache.js";
 import { getOutputFormat, type FormatOptions, type OutputFormat } from "../format/index.js";
 
-export function runTypes(args: ParsedArgs, config: ResolvedConfig): void {
+export function runTypes(args: ParsedArgs, config: ResolvedConfig): string {
   const packageName = args.package!;
   const version = args.packageVersion;
 
@@ -18,23 +18,20 @@ export function runTypes(args: ParsedArgs, config: ResolvedConfig): void {
   const outputFormat = getOutputFormat(args, config);
 
   if (!pkg.schemas || Object.keys(pkg.schemas).length === 0) {
-    console.log("No types found.");
-    return;
+    return "No types found.";
   }
 
   const schemas = pkg.schemas;
 
   if (outputFormat === "json") {
-    console.log(JSON.stringify(schemas, null, 2));
-    return;
+    return JSON.stringify(schemas, null, 2);
   }
 
   // For text/markdown/summary, list type names
   const names = Object.keys(schemas).sort();
 
   if (outputFormat === "summary") {
-    console.log(names.join("\n"));
-    return;
+    return names.join("\n");
   }
 
   // Text or markdown output
@@ -59,5 +56,5 @@ export function runTypes(args: ParsedArgs, config: ResolvedConfig): void {
     }
   }
 
-  console.log(lines.join("\n"));
+  return lines.join("\n");
 }

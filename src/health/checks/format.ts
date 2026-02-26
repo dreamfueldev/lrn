@@ -217,6 +217,9 @@ export const F004: Check = {
 
 /**
  * F005: Signature code block should use typescript language
+ *
+ * Kind-aware: component/command/resource members are expected to have
+ * non-TypeScript signatures (html, bash, hcl, etc.), so they are exempt.
  */
 export const F005: Check = {
   id: "F005",
@@ -227,6 +230,11 @@ export const F005: Check = {
   appliesTo: ["member"],
   check: (file: FileContext, _context: CheckContext): Issue[] => {
     if (!file.tokens) return [];
+
+    // Non-TS-native kinds are exempt from this check
+    const kind = extractMetadata(file.tokens, "Kind")?.toLowerCase();
+    const nonTsKinds = ["component", "command", "resource"];
+    if (kind && nonTsKinds.includes(kind)) return [];
 
     // Find first code block (should be signature)
     for (const token of file.tokens) {

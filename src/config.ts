@@ -9,11 +9,11 @@
  * 5. Built-in defaults (lowest priority)
  */
 
-import { readFileSync, existsSync } from "node:fs";
-import { join } from "node:path";
+import { readFileSync, existsSync, writeFileSync } from "node:fs";
+import { join, dirname } from "node:path";
 import { homedir } from "node:os";
 import type { LrnConfig, PackageSpec } from "./schema/index.js";
-import { ConfigError } from "./errors.js";
+import { ConfigError, ArgumentError } from "./errors.js";
 import type { ParsedArgs } from "./args.js";
 
 /**
@@ -34,7 +34,7 @@ export interface ResolvedConfig {
  * Default configuration values
  */
 const DEFAULT_CONFIG: ResolvedConfig = {
-  registry: "https://registry.lrn.dev",
+  registry: "https://uselrn.dev",
   cache: join(homedir(), ".lrn"),
   defaultFormat: "text",
   packages: {},
@@ -56,12 +56,22 @@ export function loadConfig(args: ParsedArgs): ResolvedConfig {
       config = mergeConfig(config, userConfig);
     }
 
-    // Load project config (./lrn.config.json or specified --config)
-    const projectConfigPath = args.options.config || findProjectConfig();
-    if (projectConfigPath) {
-      const projectConfig = loadConfigFile(projectConfigPath, true);
+    // Load project config (./lrn.config.json, package.json "lrn", or --config)
+    if (args.options.config) {
+      const projectConfig = loadConfigFile(args.options.config, true);
       if (projectConfig) {
         config = mergeConfig(config, projectConfig);
+      }
+    } else {
+      const location = findProjectConfig();
+      if (location) {
+        const projectConfig =
+          location.type === "package.json"
+            ? loadConfigFromPackageJson(location.path)
+            : loadConfigFile(location.path, true);
+        if (projectConfig) {
+          config = mergeConfig(config, projectConfig);
+        }
       }
     }
   }
@@ -148,21 +158,56 @@ function validateConfig(config: LrnConfig, path: string): void {
 }
 
 /**
- * Find project config file by searching upward
+ * Location of a discovered project config
  */
-function findProjectConfig(): string | null {
-  const configName = "lrn.config.json";
+export interface ProjectConfigLocation {
+  path: string;
+  type: "file" | "package.json";
+}
+
+/**
+ * Find project config file by searching upward.
+ * Checks lrn.config.json first, then package.json "lrn" key, at each level.
+ */
+export function findProjectConfig(): ProjectConfigLocation | null {
   let dir = process.cwd();
 
   while (true) {
-    const configPath = join(dir, configName);
+    // Prefer lrn.config.json
+    const configPath = join(dir, "lrn.config.json");
     if (existsSync(configPath)) {
-      return configPath;
+      // Warn if package.json also has "lrn" key in same dir
+      const pkgPath = join(dir, "package.json");
+      if (existsSync(pkgPath)) {
+        try {
+          const pkg = JSON.parse(readFileSync(pkgPath, "utf-8"));
+          if (pkg.lrn) {
+            process.stderr.write(
+              `Warning: Both lrn.config.json and package.json "lrn" key found in ${dir}. Using lrn.config.json.\n`
+            );
+          }
+        } catch {
+          // Ignore parse errors in package.json
+        }
+      }
+      return { path: configPath, type: "file" };
+    }
+
+    // Fall back to package.json "lrn" key
+    const pkgPath = join(dir, "package.json");
+    if (existsSync(pkgPath)) {
+      try {
+        const pkg = JSON.parse(readFileSync(pkgPath, "utf-8"));
+        if (pkg.lrn) {
+          return { path: pkgPath, type: "package.json" };
+        }
+      } catch {
+        // Ignore parse errors — keep searching
+      }
     }
 
     const parent = join(dir, "..");
     if (parent === dir) {
-      // Reached root
       break;
     }
     dir = parent;
@@ -222,9 +267,13 @@ function applyArgs(config: ResolvedConfig, args: ParsedArgs): ResolvedConfig {
 
   if (args.options.format) {
     const format = args.options.format;
-    if (["text", "json", "markdown", "summary"].includes(format)) {
-      result.defaultFormat = format as ResolvedConfig["defaultFormat"];
+    const validFormats = ["text", "json", "markdown", "summary"];
+    if (!validFormats.includes(format)) {
+      throw new ArgumentError(
+        `Invalid format: ${format}. Must be one of: ${validFormats.join(", ")}`
+      );
     }
+    result.defaultFormat = format as ResolvedConfig["defaultFormat"];
   }
 
   return result;
@@ -239,6 +288,135 @@ function expandPath(path: string | undefined): string | undefined {
     return join(homedir(), path.slice(1));
   }
   return path;
+}
+
+/**
+ * Load config from the "lrn" key of a package.json file
+ */
+function loadConfigFromPackageJson(
+  pkgPath: string,
+  throwOnError: boolean = true
+): LrnConfig | null {
+  try {
+    const content = readFileSync(pkgPath, "utf-8");
+    const pkg = JSON.parse(content);
+    if (!pkg.lrn || typeof pkg.lrn !== "object") {
+      return null;
+    }
+    const config = pkg.lrn as LrnConfig;
+    validateConfig(config, pkgPath);
+    return config;
+  } catch (error) {
+    if (error instanceof ConfigError) {
+      throw error;
+    }
+    if (throwOnError) {
+      throw new ConfigError(`Failed to read package.json: ${pkgPath}`, pkgPath);
+    }
+    return null;
+  }
+}
+
+/**
+ * Find or create a config location for writing.
+ * Searches for existing config; creates lrn.config.json in cwd if none found.
+ */
+export function resolveWriteTarget(
+  saveToPackageJson: boolean
+): ProjectConfigLocation {
+  const existing = findProjectConfig();
+
+  if (saveToPackageJson) {
+    // Write to package.json "lrn" key
+    const pkgPath = join(process.cwd(), "package.json");
+    if (existing && existing.type === "package.json") {
+      return existing;
+    }
+    // Use cwd package.json (must exist)
+    if (existsSync(pkgPath)) {
+      return { path: pkgPath, type: "package.json" };
+    }
+    throw new ConfigError(
+      "No package.json found in current directory.",
+      pkgPath
+    );
+  }
+
+  // Use existing config if found
+  if (existing) {
+    return existing;
+  }
+
+  // Create lrn.config.json in cwd
+  return { path: join(process.cwd(), "lrn.config.json"), type: "file" };
+}
+
+/**
+ * Add or update a package entry in a config file.
+ */
+export function writePackageEntry(
+  target: ProjectConfigLocation,
+  name: string,
+  spec: PackageSpec
+): void {
+  if (target.type === "package.json") {
+    const content = readFileSync(target.path, "utf-8");
+    const pkg = JSON.parse(content);
+    if (!pkg.lrn) {
+      pkg.lrn = {};
+    }
+    if (!pkg.lrn.packages) {
+      pkg.lrn.packages = {};
+    }
+    pkg.lrn.packages[name] = spec;
+    writeFileSync(target.path, JSON.stringify(pkg, null, 2) + "\n");
+  } else {
+    let config: LrnConfig = {};
+    if (existsSync(target.path)) {
+      config = JSON.parse(readFileSync(target.path, "utf-8"));
+    }
+    if (!config.packages) {
+      config.packages = {};
+    }
+    config.packages[name] = spec;
+    writeFileSync(target.path, JSON.stringify(config, null, 2) + "\n");
+  }
+}
+
+/**
+ * Remove a package entry from a config file.
+ * Returns true if the entry was found and removed, false if not found.
+ */
+export function removePackageEntry(
+  target: ProjectConfigLocation,
+  name: string
+): boolean {
+  if (target.type === "package.json") {
+    const content = readFileSync(target.path, "utf-8");
+    const pkg = JSON.parse(content);
+    if (!pkg.lrn?.packages || !(name in pkg.lrn.packages)) {
+      return false;
+    }
+    delete pkg.lrn.packages[name];
+    writeFileSync(target.path, JSON.stringify(pkg, null, 2) + "\n");
+    return true;
+  } else {
+    const content = readFileSync(target.path, "utf-8");
+    const config = JSON.parse(content) as LrnConfig;
+    if (!config.packages || !(name in config.packages)) {
+      return false;
+    }
+    delete config.packages[name];
+    writeFileSync(target.path, JSON.stringify(config, null, 2) + "\n");
+    return true;
+  }
+}
+
+/**
+ * Get the directory containing the config file (for resolving relative paths).
+ */
+export function getConfigDir(target: ProjectConfigLocation): string {
+  return dirname(target.path);
 }
 
 /**

@@ -11,7 +11,7 @@ import type { ResolvedConfig } from "../config.js";
 import { loadPackage } from "../cache.js";
 import { format, getOutputFormat, type FormatOptions } from "../format/index.js";
 
-export function runList(args: ParsedArgs, config: ResolvedConfig): void {
+export function runList(args: ParsedArgs, config: ResolvedConfig): string {
   const packageName = args.package!;
   const version = args.packageVersion;
 
@@ -27,9 +27,20 @@ export function runList(args: ParsedArgs, config: ResolvedConfig): void {
     format: outputFormat,
     full: args.flags.deep || args.flags.full,
     packageName,
+    signatures: args.flags.signatures,
   };
 
-  console.log(format(members, options));
+  let output = format(members, options);
+
+  if (args.flags.withGuides && pkg.guides.length > 0) {
+    output += "\n\nGuides:";
+    for (const guide of pkg.guides) {
+      const summary = guide.summary ? `  ${guide.summary}` : "";
+      output += `\n  ${guide.slug}${summary}`;
+    }
+  }
+
+  return output;
 }
 
 function applyFilters(members: Member[], args: ParsedArgs): Member[] {
@@ -46,14 +57,9 @@ function applyFilters(members: Member[], args: ParsedArgs): Member[] {
     filtered = filterByTags(filtered, args.options.tag);
   }
 
-  // Filter deprecated
+  // Filter deprecated: by default exclude deprecated, --deprecated includes them
   if (!args.flags.deprecated) {
-    // By default, hide deprecated unless --deprecated is set
-    // Actually, show all by default, --deprecated filters TO deprecated only
-  }
-
-  if (args.flags.deprecated) {
-    filtered = filterDeprecated(filtered);
+    filtered = excludeDeprecated(filtered);
   }
 
   return filtered;
@@ -80,7 +86,9 @@ function filterByTags(members: Member[], tags: string[]): Member[] {
   const result: Member[] = [];
 
   for (const member of members) {
-    const hasMatchingTag = member.tags?.some((t) => tags.includes(t));
+    const hasMatchingTag = member.tags?.some((t) =>
+      tags.some((ft) => t.toLowerCase() === ft.toLowerCase())
+    );
     if (hasMatchingTag) {
       result.push(member);
     }
@@ -93,16 +101,15 @@ function filterByTags(members: Member[], tags: string[]): Member[] {
   return result;
 }
 
-function filterDeprecated(members: Member[]): Member[] {
+function excludeDeprecated(members: Member[]): Member[] {
   const result: Member[] = [];
 
   for (const member of members) {
-    if (member.deprecated) {
-      result.push(member);
-    }
+    if (member.deprecated) continue;
     if (member.children) {
-      const filteredChildren = filterDeprecated(member.children);
-      result.push(...filteredChildren);
+      result.push({ ...member, children: excludeDeprecated(member.children) });
+    } else {
+      result.push(member);
     }
   }
 

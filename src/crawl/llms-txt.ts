@@ -13,7 +13,7 @@
  */
 
 import type { LlmsTxt, LlmsTxtSection, LlmsTxtEntry } from "./types.js";
-import { fetchUrl, getOrigin } from "./fetcher.js";
+import { getOrigin } from "./fetcher.js";
 
 /**
  * Check if a URL points to an llms.txt file
@@ -28,36 +28,14 @@ export function isLlmsTxtUrl(url: string): boolean {
 }
 
 /**
- * Try to detect and fetch llms.txt for a domain
+ * Check if a URL points to an llms-full.txt file
  */
-export async function detectLlmsTxt(url: string): Promise<LlmsTxt | null> {
-  const origin = getOrigin(url);
-  const llmsTxtUrl = `${origin}/llms.txt`;
-
+export function isLlmsFullUrl(url: string): boolean {
   try {
-    const result = await fetchUrl(llmsTxtUrl, { retries: 1 });
-
-    // Check if it looks like an llms.txt file
-    if (!looksLikeLlmsTxt(result.body)) {
-      return null;
-    }
-
-    return parseLlmsTxt(result.body);
+    return new URL(url).pathname.endsWith("/llms-full.txt");
   } catch {
-    return null;
+    return false;
   }
-}
-
-/**
- * Check if content looks like an llms.txt file
- */
-function looksLikeLlmsTxt(content: string): boolean {
-  // Should start with # or have ## sections with - entries
-  const hasTitle = /^#\s+.+$/m.test(content);
-  const hasSection = /^##\s+.+$/m.test(content);
-  const hasEntry = /^-\s+.+:\s+\S+$/m.test(content);
-
-  return hasTitle || (hasSection && hasEntry);
 }
 
 /**

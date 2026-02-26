@@ -1,0 +1,153 @@
+{
+  "name": "mycli",
+  "version": "1.5.0",
+  "summary": "A container management CLI",
+  "description": "mycli provides commands for building, running, and managing containers.",
+  "source": {
+    "type": "markdown",
+    "url": "https://github.com/example/mycli",
+    "generatedAt": "2026-01-15T10:00:00Z"
+  },
+  "tags": ["cli", "containers"],
+  "members": [
+    {
+      "name": "run",
+      "kind": "command",
+      "summary": "Run a container from an image",
+      "description": "Creates and starts a new container from the specified image. If the image is not available locally, it will be pulled from the registry.",
+      "signature": "mycli run [OPTIONS] IMAGE [COMMAND] [ARG...]",
+      "signatureLanguage": "bash",
+      "parameters": [
+        {
+          "name": "--name",
+          "type": "string",
+          "description": "Assign a name to the container",
+          "required": false
+        },
+        {
+          "name": "--port",
+          "type": "string",
+          "description": "Publish container port (host:container)",
+          "required": false
+        },
+        {
+          "name": "--detach",
+          "type": "boolean",
+          "description": "Run container in background",
+          "required": false
+        },
+        {
+          "name": "--env",
+          "type": "string",
+          "description": "Set environment variable",
+          "required": false
+        }
+      ],
+      "examples": [
+        {
+          "title": "Run nginx",
+          "language": "bash",
+          "code": "mycli run --name web --port 8080:80 --detach nginx:latest"
+        }
+      ],
+      "tags": ["core"]
+    },
+    {
+      "name": "build",
+      "kind": "command",
+      "summary": "Build an image from a Dockerfile",
+      "description": "Reads a Dockerfile and builds a container image. Supports multi-stage builds and build arguments.",
+      "signature": "mycli build [OPTIONS] PATH",
+      "signatureLanguage": "bash",
+      "parameters": [
+        {
+          "name": "--tag",
+          "type": "string",
+          "description": "Name and tag for the image (name:tag)",
+          "required": false
+        },
+        {
+          "name": "--file",
+          "type": "string",
+          "description": "Path to Dockerfile (default: PATH/Dockerfile)",
+          "required": false
+        },
+        {
+          "name": "--build-arg",
+          "type": "string",
+          "description": "Set build-time variable",
+          "required": false
+        }
+      ],
+      "examples": [
+        {
+          "title": "Build from current directory",
+          "language": "bash",
+          "code": "mycli build --tag myapp:latest ."
+        }
+      ],
+      "tags": ["core"]
+    },
+    {
+      "name": "ps",
+      "kind": "command",
+      "summary": "List running containers",
+      "signature": "mycli ps [OPTIONS]",
+      "signatureLanguage": "bash",
+      "parameters": [
+        {
+          "name": "--all",
+          "type": "boolean",
+          "description": "Show all containers (default: running only)",
+          "required": false
+        },
+        {
+          "name": "--quiet",
+          "type": "boolean",
+          "description": "Only display container IDs",
+          "required": false
+        }
+      ],
+      "tags": ["info"]
+    },
+    {
+      "name": "stop",
+      "kind": "command",
+      "summary": "Stop a running container",
+      "signature": "mycli stop [OPTIONS] CONTAINER [CONTAINER...]",
+      "signatureLanguage": "bash",
+      "parameters": [
+        {
+          "name": "--time",
+          "type": "number",
+          "description": "Seconds to wait before killing (default: 10)",
+          "required": false
+        }
+      ],
+      "tags": ["core"]
+    }
+  ],
+  "guides": [
+    {
+      "slug": "quickstart",
+      "title": "Getting Started",
+      "summary": "Install and run your first container",
+      "kind": "quickstart",
+      "sections": [
+        {
+          "id": "install",
+          "title": "Installation",
+          "summary": "Install mycli on your system",
+          "content": "Download the latest release from the releases page or install via your package manager."
+        },
+        {
+          "id": "first-container",
+          "title": "Your First Container",
+          "summary": "Run a container in 60 seconds",
+          "content": "Pull and run a hello-world image to verify your installation works."
+        }
+      ]
+    }
+  ],
+  "schemas": {}
+}

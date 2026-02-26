@@ -1,33 +1,49 @@
 # Test Implementation Progress
 
-Last updated: 2025-01-25
+Last updated: 2026-02-14
 
 ## Summary
 
 | Status | Count |
 |--------|-------|
-| Passing | 213 |
-| TODO | 241 |
-| Total | 454 |
+| Passing | 853 |
+| TODO | 49 |
+| Total | 902 |
 
-**Progress: 47% complete**
+**Progress: 95% complete**
 
 ---
 
 ## Completed Tests by File
 
-### errors.spec.ts (11 implemented)
+### errors.spec.ts (20 implemented)
 - [x] exits with code 0 on success
 - [x] exits with code 1 on general error
 - [x] exits with code 2 when package not found
 - [x] exits with code 3 when member/guide not found
+- [x] exits with code 4 on network error
+- [x] invalid command syntax
+- [x] invalid option value
+- [x] missing required argument
+- [x] invalid config file
+- [x] permission denied errors
+- [x] file system errors
 - [x] package not in local cache
+- [x] package name typo suggestions
 - [x] member path does not exist
 - [x] guide slug does not exist
 - [x] section path does not exist
 - [x] type/schema name does not exist
+- [x] similar name suggestions
 - [x] shows clear error message
+- [x] shows error context (what was being attempted)
+- [x] shows suggestion for resolution when possible
+- [x] uses consistent error format across commands
 - [x] uses stderr for error messages
+- [x] --verbose: shows stack trace on error
+- [x] --verbose: shows additional debug information
+- [x] --verbose: shows network request details
+- [x] --verbose: shows config resolution details
 
 ### discovery.spec.ts (5 implemented)
 - [x] lists all cached packages
@@ -51,13 +67,19 @@ Last updated: 2025-01-25
 - [x] resolves single-level section path
 - [x] resolves multi-level section path
 
-### filtering.spec.ts (7 implemented)
+### filtering.spec.ts (13 implemented)
 - [x] filters members by kind: method
 - [x] filters members by kind: type
 - [x] filters members by kind: property
 - [x] shows deprecation notice for deprecated items
 - [x] combines --tag and --kind with AND logic
 - [x] filters apply to lrn <package> list --deep
+- [x] filters guides to those with specified tag
+- [x] performs case-insensitive tag matching
+- [x] excludes deprecated members by default (without flag)
+- [x] filters apply to lrn <package> guides (tag only)
+- [x] filters apply to lrn search results
+- [x] filters apply to lrn <package> search results
 
 ### package.spec.ts (12 implemented)
 - [x] shows source information
@@ -73,7 +95,7 @@ Last updated: 2025-01-25
 - [x] indents nested members for visual hierarchy
 - [x] traverses all nesting levels
 
-### search.spec.ts (8 implemented)
+### search.spec.ts (12 implemented)
 - [x] shows result type (member or guide)
 - [x] shows result summary
 - [x] shows result path/slug for each result (package search)
@@ -82,6 +104,10 @@ Last updated: 2025-01-25
 - [x] matches against member tags
 - [x] matches against guide summaries
 - [x] matches against guide tags
+- [x] respects --tag filter in search results
+- [x] respects --kind filter in search results
+- [x] respects --deprecated flag in search results
+- [x] combines search query with filters
 
 ### member.spec.ts (4 implemented)
 - [x] shows member parameters with default values
@@ -97,6 +123,16 @@ Last updated: 2025-01-25
 - [x] shows property descriptions
 - [x] indicates required properties
 - [x] shows items schema details
+
+### versions.spec.ts (8 implemented)
+- [x] requires package name argument
+- [x] requires authentication
+- [x] lists versions in descending order with latest marker
+- [x] marks cached version
+- [x] shows count summary
+- [x] returns structured JSON with --json flag
+- [x] handles 404 for unknown package
+- [x] handles network failure
 
 ---
 
@@ -142,27 +178,26 @@ Last updated: 2025-01-25
 - [ ] handles packages with remote URL specification
 - [ ] fails gracefully when registry is unreachable
 - [ ] fails gracefully when package not found in registry
-- [ ] lrn add: adds package to local cache
-- [ ] lrn add: adds package to lrn.config.json
-- [ ] lrn add: uses latest version when no version specified
-- [ ] lrn add: shows confirmation message on success
-- [ ] lrn add: creates lrn.config.json if it does not exist
-- [ ] lrn add: fails gracefully when package not found in registry
-- [ ] lrn add: adds exact version with @1.0.0 syntax
-- [ ] lrn add: adds semver range with @^1.0.0 syntax
-- [ ] lrn add: adds tilde range with @~1.0.0 syntax
-- [ ] lrn add: fails gracefully when version not found
-- [ ] lrn remove: removes package from local cache
-- [ ] lrn remove: removes package from lrn.config.json
-- [ ] lrn remove: shows confirmation message on success
-- [ ] lrn remove: fails gracefully when package not in cache
-- [ ] lrn remove: does not modify lrn.config.json if package not listed
-- [ ] lrn versions: lists all available versions from registry
-- [ ] lrn versions: shows versions in descending order
-- [ ] lrn versions: indicates which version is latest
-- [ ] lrn versions: indicates which version is currently cached
-- [ ] lrn versions: fails gracefully when package not found
-- [ ] lrn versions: fails gracefully when registry is unreachable
+- [x] lrn add: adds package to lrn.config.json (moved to package-management.spec.ts)
+- [x] lrn add: shows confirmation message on success
+- [x] lrn add: creates lrn.config.json if it does not exist
+- [x] lrn add: adds version with @version syntax
+- [x] lrn add: --path adds local file entry
+- [x] lrn add: --url adds remote URL entry
+- [x] lrn add: --path + --url errors
+- [x] lrn add: --save-to-package-json writes to package.json
+- [x] lrn add: --path with missing file errors
+- [x] lrn remove: removes package from lrn.config.json (moved to package-management.spec.ts)
+- [x] lrn remove: removes from package.json "lrn" key
+- [x] lrn remove: shows confirmation message on success
+- [x] lrn remove: errors when no config found
+- [x] lrn remove: errors when package not in config
+- [x] lrn versions: lists all available versions from registry (moved to versions.spec.ts)
+- [x] lrn versions: shows versions in descending order
+- [x] lrn versions: indicates which version is latest
+- [x] lrn versions: indicates which version is currently cached
+- [x] lrn versions: fails gracefully when package not found
+- [x] lrn versions: fails gracefully when registry is unreachable
 
 ---
 
@@ -226,43 +261,44 @@ Last updated: 2025-01-25
 
 ---
 
-### Category 3: HTTP Endpoint Details (requires formatter changes)
-**Blocked by:** Text formatter doesn't output HTTP details
+### Category 3: HTTP Endpoint Details ✅
+**Implemented in PRD-071**
 
-#### member.spec.ts - HTTP Members (5 tests)
-- [ ] shows path parameters
-- [ ] shows query parameters
-- [ ] shows request body schema
-- [ ] shows response schemas by status code
-- [ ] shows required scopes/permissions
+#### member.spec.ts - HTTP Members (4 tests)
+- [x] shows path parameters
+- [x] shows query parameters
+- [x] shows response schemas by status code
+- [x] shows required scopes/permissions
 
 ---
 
 ### Category 4: Error Handling Enhancements
-**Blocked by:** Feature implementation needed
+**Partially implemented in PRD-073**
 
-#### errors.spec.ts (18 tests)
-- [ ] exits with code 4 on network error
-- [ ] invalid command syntax
-- [ ] invalid option value
-- [ ] missing required argument
-- [ ] invalid config file
-- [ ] permission denied errors
-- [ ] file system errors
+#### errors.spec.ts — Implemented (PRD-073)
+- [x] exits with code 4 on network error
+- [x] invalid command syntax
+- [x] invalid option value
+- [x] missing required argument
+- [x] invalid config file
+- [x] permission denied errors
+- [x] file system errors
+- [x] package name typo suggestions
+- [x] similar name suggestions
+- [x] shows error context (what was being attempted)
+- [x] shows suggestion for resolution when possible
+- [x] uses consistent error format across commands
+- [x] --verbose: shows stack trace on error
+- [x] --verbose: shows additional debug information
+- [x] --verbose: shows network request details
+- [x] --verbose: shows config resolution details
+
+#### errors.spec.ts — Remaining TODO
 - [ ] package not found in registry
-- [ ] package name typo suggestions
-- [ ] similar name suggestions
 - [ ] registry unreachable
 - [ ] connection timeout
 - [ ] DNS resolution failure
 - [ ] SSL/TLS errors
-- [ ] shows error context (what was being attempted)
-- [ ] shows suggestion for resolution when possible
-- [ ] uses consistent error format across commands
-- [ ] --verbose: shows stack trace on error
-- [ ] --verbose: shows additional debug information
-- [ ] --verbose: shows network request details
-- [ ] --verbose: shows config resolution details
 - [ ] --quiet: suppresses non-essential output
 - [ ] --quiet: still shows error messages
 - [ ] --quiet: still shows requested data
@@ -276,31 +312,25 @@ Last updated: 2025-01-25
 
 ### Category 5: Minor Features & Edge Cases
 
-#### member.spec.ts (15 tests)
-- [ ] shows since version when present
-- [ ] --summary: shows only the one-line summary
-- [ ] --summary: excludes description
-- [ ] --summary: excludes parameters
-- [ ] --summary: excludes examples
-- [ ] --summary: excludes other details
-- [ ] --signature: shows only the type signature
-- [ ] --signature: excludes description
-- [ ] --signature: excludes parameters
-- [ ] --signature: excludes examples
-- [ ] --signature: shows message when member has no signature
-- [ ] --examples: shows only the examples
-- [ ] --examples: shows example title when present
-- [ ] --examples: shows example code with language hint
-- [ ] --examples: shows example description when present
-- [ ] --examples: shows all examples when multiple exist
-- [ ] --examples: shows message when member has no examples
-- [ ] --parameters: shows only the parameters
-- [ ] --parameters: shows parameter name
-- [ ] --parameters: shows parameter type
-- [ ] --parameters: shows parameter description
-- [ ] --parameters: shows parameter required status
-- [ ] --parameters: shows parameter default value
-- [ ] --parameters: shows message when member has no parameters
+#### member.spec.ts — Extraction Flags ✅ (implemented in PRD-071)
+- [x] --signature: shows only the type signature
+- [x] --signature: excludes description
+- [x] --signature: excludes parameters
+- [x] --signature: excludes examples
+- [x] --signature: shows message when member has no signature
+- [x] --examples: shows only the examples
+- [x] --examples: shows example title when present
+- [x] --examples: shows example code with language hint
+- [x] --examples: shows example description when present
+- [x] --examples: shows all examples when multiple exist
+- [x] --examples: shows message when member has no examples
+- [x] --parameters: shows only the parameters
+- [x] --parameters: shows parameter name
+- [x] --parameters: shows parameter type
+- [x] --parameters: shows parameter description
+- [x] --parameters: shows parameter required status
+- [x] --parameters: shows parameter default value
+- [x] --parameters: shows message when member has no parameters
 
 #### package.spec.ts (4 tests)
 - [ ] limits guides shown to reasonable count
@@ -309,60 +339,46 @@ Last updated: 2025-01-25
 - [ ] groups members by kind when multiple kinds present
 - [ ] shows message when package has no tags
 
-#### guide.spec.ts (2 tests)
-- [ ] shows subsection list if section has children
+#### guide.spec.ts (1 remaining)
+- [x] shows subsection list if section has children (PRD-071)
 - [ ] resolves deeply nested section path
 
-#### search.spec.ts (8 tests)
+#### search.spec.ts (3 tests)
 - [ ] limits results to reasonable count
-- [ ] ranks name matches higher than description matches
-- [ ] ranks summary matches higher than description matches
-- [ ] ranks exact matches higher than partial matches
-- [ ] ranks tag matches appropriately
 - [ ] matches against guide content
 - [ ] ranks results by relevance score
-- [ ] respects --tag filter in search results
-- [ ] respects --kind filter in search results
-- [ ] respects --deprecated flag in search results
-- [ ] combines search query with filters
 
-#### filtering.spec.ts (10 tests)
-- [ ] filters guides to those with specified tag
-- [ ] performs case-insensitive tag matching
+#### filtering.spec.ts (4 tests)
 - [ ] returns items matching ANY of the specified tags (OR logic)
 - [ ] can be combined with other filters
 - [ ] filters members by kind: constant
 - [ ] returns error for invalid kind value
 - [ ] only applies to member lists, not guides
-- [ ] excludes deprecated members by default (without flag)
 - [ ] can filter to ONLY deprecated with --deprecated --kind
 - [ ] combines --tag and --deprecated appropriately
 - [ ] combines --kind and --deprecated appropriately
 - [ ] combines all three filters correctly
-- [ ] filters apply to lrn <package> guides (tag only)
-- [ ] filters apply to lrn search results
-- [ ] filters apply to lrn <package> search results
 - [ ] filters do not apply to single item show commands
 
-#### type.spec.ts (15 tests)
-- [ ] shows property default values
-- [ ] shows property examples
-- [ ] shows minLength constraint
-- [ ] shows maxLength constraint
-- [ ] shows format constraint (email, uri, date-time, etc.)
-- [ ] shows pattern constraint
-- [ ] shows enum values when present
-- [ ] shows minimum constraint
-- [ ] shows maximum constraint
-- [ ] distinguishes integer from number
-- [ ] shows referenced schema inline
-- [ ] handles circular references gracefully
-- [ ] shows reference path for complex nested refs
-- [ ] oneOf: shows all possible types
-- [ ] oneOf: shows description for each variant
-- [ ] allOf: shows merged properties from all schemas
-- [ ] allOf: indicates which properties come from which schema
-- [ ] indicates when schema is nullable
+#### type.spec.ts — Schema Constraints ✅ (implemented in PRD-071)
+- [x] shows property default values
+- [x] shows property examples
+- [x] shows minLength constraint (array)
+- [x] shows maxLength constraint (array)
+- [x] shows format constraint (email, uri, date-time, etc.)
+- [x] shows pattern constraint
+- [x] shows minLength constraint (string)
+- [x] shows maxLength constraint (string)
+- [x] shows minimum constraint
+- [x] shows maximum constraint
+- [x] shows referenced schema inline
+- [x] handles circular references gracefully
+- [x] shows reference path for complex nested refs
+- [x] oneOf: shows all possible types
+- [x] oneOf: shows description for each variant
+- [x] allOf: shows merged properties from all schemas
+- [x] allOf: indicates which properties come from which schema
+- [x] indicates when schema is nullable
 
 #### output-format.spec.ts (6 tests)
 - [ ] uses appropriate spacing between sections
@@ -393,17 +409,15 @@ Last updated: 2025-01-25
 
 ### High Priority (Unblocks many features)
 1. **Config system tests** - Foundation for other features
-2. **HTTP endpoint details** - Important for API documentation use case
 
 ### Medium Priority (Core functionality)
-3. **Error handling enhancements** - Better UX
-4. **Search improvements** - Better relevance ranking
-5. **Filtering enhancements** - More powerful queries
+2. **Error handling enhancements** - Better UX
+3. **Search improvements** - Better relevance ranking
+4. **Filtering enhancements** - More powerful queries
 
 ### Low Priority (Nice to have)
-6. **Member slice flags** (--summary, --signature, --examples, --parameters)
-7. **Format edge cases**
-8. **Help formatting improvements
+5. **Format edge cases**
+6. **Help formatting improvements**
 
 ### Blocked (Requires registry)
 9. **Version selection** - Requires registry

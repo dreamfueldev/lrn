@@ -10,7 +10,7 @@ import type { ResolvedConfig } from "../config.js";
 import { loadPackage } from "../cache.js";
 import { format, getOutputFormat, type FormatOptions, type TagList } from "../format/index.js";
 
-export function runTags(args: ParsedArgs, config: ResolvedConfig): void {
+export function runTags(args: ParsedArgs, config: ResolvedConfig): string {
   const packageName = args.package!;
   const version = args.packageVersion;
 
@@ -46,8 +46,7 @@ export function runTags(args: ParsedArgs, config: ResolvedConfig): void {
   collectGuideTags(pkg.guides);
 
   if (tagCounts.size === 0) {
-    console.log("No tags found.");
-    return;
+    return "No tags found.";
   }
 
   // Sort by count descending, then alphabetically
@@ -70,5 +69,5 @@ export function runTags(args: ParsedArgs, config: ResolvedConfig): void {
     packageName,
   };
 
-  console.log(format(tagList, options));
+  return format(tagList, options);
 }

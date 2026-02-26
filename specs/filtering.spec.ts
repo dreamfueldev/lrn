@@ -31,8 +31,20 @@ describe("Filtering Options", () => {
       expect(result.exitCode).toBe(0);
     });
 
-    it.todo("filters guides to those with specified tag");
-    it.todo("performs case-insensitive tag matching");
+    it("filters guides to those with specified tag", async () => {
+      const result = await runWithCache(["acme-api", "guides", "--tag", "auth"]);
+      expect(result.stdout).toContain("authentication");
+      expect(result.stdout).not.toContain("quickstart");
+      expect(result.stdout).not.toContain("webhooks");
+      expect(result.exitCode).toBe(0);
+    });
+
+    it("performs case-insensitive tag matching", async () => {
+      const result = await runWithCache(["mathlib", "list", "--tag", "Arithmetic"]);
+      expect(result.stdout).toContain("add");
+      expect(result.stdout).toContain("subtract");
+      expect(result.exitCode).toBe(0);
+    });
 
     it("returns empty list when no items match tag", async () => {
       const result = await runWithCache(["mathlib", "list", "--tag", "nonexistenttag"]);
@@ -46,8 +58,22 @@ describe("Filtering Options", () => {
         expect(result.exitCode).toBe(0);
       });
 
-      it.todo("returns items matching ANY of the specified tags (OR logic)");
-      it.todo("can be combined with other filters");
+      it("returns items matching ANY of the specified tags (OR logic)", async () => {
+        const result = await runWithCache(["mathlib", "list", "--tag", "arithmetic", "--tag", "algebra"]);
+        expect(result.exitCode).toBe(0);
+        // arithmetic: add, subtract, multiply, divide, oldSum
+        expect(result.stdout).toContain("add");
+        // algebra: sqrt, pow, Vector
+        expect(result.stdout).toContain("sqrt");
+      });
+
+      it("can be combined with other filters", async () => {
+        const result = await runWithCache(["mathlib", "list", "--tag", "arithmetic", "--kind", "function"]);
+        expect(result.exitCode).toBe(0);
+        expect(result.stdout).toContain("add");
+        // Calculator is a class, should not appear with --kind function
+        expect(result.stdout).not.toContain("Calculator [class]");
+      });
     });
   });
 
@@ -94,8 +120,40 @@ describe("Filtering Options", () => {
       expect(result.stdout).toContain("[property]");
     });
 
-    it.todo("filters members by kind: constant");
-    it.todo("returns error for invalid kind value");
+    it("filters members by kind: component", async () => {
+      const result = await runWithCache(["uikit", "list", "--kind", "component"]);
+      expect(result.stdout).toContain("Button");
+      expect(result.stdout).toContain("Card");
+      expect(result.stdout).toContain("[component]");
+      expect(result.exitCode).toBe(0);
+    });
+
+    it("filters members by kind: command", async () => {
+      const result = await runWithCache(["mycli", "list", "--kind", "command"]);
+      expect(result.stdout).toContain("run");
+      expect(result.stdout).toContain("build");
+      expect(result.stdout).toContain("[command]");
+      expect(result.exitCode).toBe(0);
+    });
+
+    it("filters members by kind: resource", async () => {
+      const result = await runWithCache(["infra-aws", "list", "--kind", "resource"]);
+      expect(result.stdout).toContain("aws_lambda_function");
+      expect(result.stdout).toContain("aws_s3_bucket");
+      expect(result.stdout).toContain("[resource]");
+      expect(result.exitCode).toBe(0);
+    });
+
+    it("filters members by kind: constant", async () => {
+      const result = await runWithCache(["mathlib", "list", "--kind", "constant"]);
+      expect(result.stdout).toContain("PI");
+      expect(result.stdout).toContain("[constant]");
+      expect(result.exitCode).toBe(0);
+    });
+    it("returns empty list for unrecognized kind value", async () => {
+      const result = await runWithCache(["mathlib", "list", "--kind", "bogus"]);
+      expect(result.exitCode).toBe(0);
+    });
 
     it("returns empty list when no items match kind", async () => {
       const result = await runWithCache(["mathlib", "list", "--kind", "namespace"]);
@@ -103,7 +161,12 @@ describe("Filtering Options", () => {
       expect(result.exitCode).toBe(0);
     });
 
-    it.todo("only applies to member lists, not guides");
+    it("only applies to member lists, not guides", async () => {
+      const result = await runWithCache(["acme-api", "guides", "--kind", "method"]);
+      expect(result.exitCode).toBe(0);
+      // Guides should still appear despite --kind filter
+      expect(result.stdout).toContain("quickstart");
+    });
   });
 
   describe("--deprecated", () => {
@@ -112,14 +175,23 @@ describe("Filtering Options", () => {
       expect(result.stdout).toContain("oldSum");
     });
 
-    it.todo("excludes deprecated members by default (without flag)");
+    it("excludes deprecated members by default (without flag)", async () => {
+      const result = await runWithCache(["mathlib", "list"]);
+      expect(result.stdout).not.toContain("oldSum");
+      expect(result.stdout).toContain("add");
+      expect(result.exitCode).toBe(0);
+    });
 
     it("shows deprecation notice for deprecated items", async () => {
       const result = await runWithCache(["mathlib", "list", "--deprecated"]);
       expect(result.stdout).toContain("(deprecated)");
     });
 
-    it.todo("can filter to ONLY deprecated with --deprecated --kind");
+    it("filters to only deprecated functions with --deprecated --kind", async () => {
+      const result = await runWithCache(["mathlib", "list", "--kind", "function", "--deprecated"]);
+      expect(result.stdout).toContain("oldSum");
+      expect(result.stdout).not.toContain("Calculator");
+    });
   });
 
   describe("filter combinations", () => {
@@ -131,9 +203,21 @@ describe("Filtering Options", () => {
       expect(result.stdout).not.toContain("[namespace]");
     });
 
-    it.todo("combines --tag and --deprecated appropriately");
-    it.todo("combines --kind and --deprecated appropriately");
-    it.todo("combines all three filters correctly");
+    it("combines --tag and --deprecated appropriately", async () => {
+      const result = await runWithCache(["mathlib", "list", "--tag", "arithmetic", "--deprecated"]);
+      expect(result.stdout).toContain("oldSum");
+    });
+
+    it("combines --kind and --deprecated appropriately", async () => {
+      const result = await runWithCache(["mathlib", "list", "--kind", "function", "--deprecated"]);
+      expect(result.stdout).toContain("oldSum");
+      expect(result.stdout).not.toContain("[class]");
+    });
+
+    it("combines all three filters correctly", async () => {
+      const result = await runWithCache(["mathlib", "list", "--kind", "function", "--tag", "arithmetic", "--deprecated"]);
+      expect(result.stdout).toContain("oldSum");
+    });
   });
 
   describe("filter application", () => {
@@ -149,9 +233,28 @@ describe("Filtering Options", () => {
       expect(result.exitCode).toBe(0);
     });
 
-    it.todo("filters apply to lrn <package> guides (tag only)");
-    it.todo("filters apply to lrn search results");
-    it.todo("filters apply to lrn <package> search results");
-    it.todo("filters do not apply to single item show commands");
+    it("filters apply to lrn <package> guides (tag only)", async () => {
+      const result = await runWithCache(["acme-api", "guides", "--tag", "security"]);
+      expect(result.stdout).toContain("authentication");
+      expect(result.stdout).not.toContain("webhooks");
+      expect(result.exitCode).toBe(0);
+    });
+
+    it("filters apply to lrn search results", async () => {
+      const result = await runWithCache(["search", "add", "--tag", "arithmetic"]);
+      expect(result.stdout).toContain("add");
+      expect(result.exitCode).toBe(0);
+    });
+
+    it("filters apply to lrn <package> search results", async () => {
+      const result = await runWithCache(["mathlib", "search", "add", "--tag", "arithmetic"]);
+      expect(result.stdout).toContain("add");
+      expect(result.exitCode).toBe(0);
+    });
+    it("filters do not apply to single item show commands", async () => {
+      const result = await runWithCache(["mathlib", "add", "--kind", "class"]);
+      expect(result.exitCode).toBe(0);
+      expect(result.stdout).toContain("add");
+    });
   });
 });

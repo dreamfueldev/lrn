@@ -1,0 +1,137 @@
+{
+  "name": "infra-aws",
+  "version": "5.0.0",
+  "summary": "AWS infrastructure resources for Terraform",
+  "description": "Terraform provider resources for provisioning and managing AWS infrastructure including Lambda, S3, and IAM.",
+  "source": {
+    "type": "markdown",
+    "url": "https://registry.terraform.io/providers/hashicorp/aws",
+    "generatedAt": "2026-01-15T10:00:00Z"
+  },
+  "tags": ["aws", "terraform", "infrastructure"],
+  "members": [
+    {
+      "name": "aws_lambda_function",
+      "kind": "resource",
+      "summary": "Manages an AWS Lambda function",
+      "description": "Provides a Lambda Function resource. Lambda allows you to run code without provisioning or managing servers.",
+      "signature": "resource \"aws_lambda_function\" \"example\" {\n  function_name = \"my-function\"\n  runtime       = \"nodejs20.x\"\n  handler       = \"index.handler\"\n  role          = aws_iam_role.lambda.arn\n}",
+      "signatureLanguage": "hcl",
+      "parameters": [
+        {
+          "name": "function_name",
+          "type": "string",
+          "description": "Unique name for the Lambda function",
+          "required": true
+        },
+        {
+          "name": "runtime",
+          "type": "string",
+          "description": "Runtime environment (e.g., nodejs20.x, python3.12)",
+          "required": true
+        },
+        {
+          "name": "handler",
+          "type": "string",
+          "description": "Function entrypoint (e.g., index.handler)",
+          "required": true
+        },
+        {
+          "name": "role",
+          "type": "string",
+          "description": "IAM role ARN for execution permissions",
+          "required": true
+        },
+        {
+          "name": "memory_size",
+          "type": "number",
+          "description": "Memory in MB (128-10240, default: 128)",
+          "required": false
+        },
+        {
+          "name": "timeout",
+          "type": "number",
+          "description": "Execution timeout in seconds (default: 3, max: 900)",
+          "required": false
+        }
+      ],
+      "examples": [
+        {
+          "title": "Basic Lambda function",
+          "language": "hcl",
+          "code": "resource \"aws_lambda_function\" \"hello\" {\n  function_name = \"hello-world\"\n  runtime       = \"nodejs20.x\"\n  handler       = \"index.handler\"\n  role          = aws_iam_role.lambda_exec.arn\n  filename      = \"lambda.zip\"\n}"
+        }
+      ],
+      "tags": ["compute", "serverless"]
+    },
+    {
+      "name": "aws_s3_bucket",
+      "kind": "resource",
+      "summary": "Manages an S3 bucket",
+      "description": "Provides an S3 bucket resource for object storage.",
+      "signature": "resource \"aws_s3_bucket\" \"example\" {\n  bucket = \"my-bucket\"\n}",
+      "signatureLanguage": "hcl",
+      "parameters": [
+        {
+          "name": "bucket",
+          "type": "string",
+          "description": "Name of the bucket (must be globally unique)",
+          "required": true
+        },
+        {
+          "name": "force_destroy",
+          "type": "boolean",
+          "description": "Allow deletion of non-empty bucket",
+          "required": false
+        }
+      ],
+      "tags": ["storage"]
+    },
+    {
+      "name": "aws_iam_role",
+      "kind": "resource",
+      "summary": "Manages an IAM role",
+      "description": "Provides an IAM role resource for defining permissions.",
+      "signature": "resource \"aws_iam_role\" \"example\" {\n  name               = \"my-role\"\n  assume_role_policy = data.aws_iam_policy_document.assume.json\n}",
+      "signatureLanguage": "hcl",
+      "parameters": [
+        {
+          "name": "name",
+          "type": "string",
+          "description": "Name of the IAM role",
+          "required": true
+        },
+        {
+          "name": "assume_role_policy",
+          "type": "string",
+          "description": "JSON trust policy for who can assume this role",
+          "required": true
+        }
+      ],
+      "tags": ["security", "iam"]
+    }
+  ],
+  "guides": [
+    {
+      "slug": "getting-started",
+      "title": "Getting Started with AWS Provider",
+      "summary": "Configure Terraform for AWS and create your first resource",
+      "kind": "howto",
+      "sections": [
+        {
+          "id": "configure-provider",
+          "title": "Configure the Provider",
+          "summary": "Set up AWS credentials and region",
+          "content": "Add the AWS provider block to your Terraform configuration with region and credential settings."
+        },
+        {
+          "id": "first-resource",
+          "title": "Create Your First Resource",
+          "summary": "Deploy an S3 bucket",
+          "content": "Define an `aws_s3_bucket` resource and run `terraform apply` to create it."
+        }
+      ]
+    }
+  ],
+  "schemas": {}
+}

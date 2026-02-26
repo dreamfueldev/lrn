@@ -51,7 +51,7 @@ export function formatSummary(data: FormattableData, options: FormatOptions): st
     return formatSection(data as Section);
   }
 
-  if ("type" in data || "properties" in data || "$ref" in data) {
+  if ("type" in data || "properties" in data || "$ref" in data || "oneOf" in data || "allOf" in data) {
     return formatSchema(data as Schema);
   }
 
@@ -66,8 +66,7 @@ function formatPackage(pkg: Package, options: FormatOptions): string {
   const lines: string[] = [];
 
   // Members
-  const members = options.full ? pkg.members : pkg.members.slice(0, 10);
-  for (const member of members) {
+  for (const member of pkg.members) {
     lines.push(member.name);
   }
 

@@ -5,6 +5,7 @@
  */
 
 import type { ParsedArgs } from "../args.js";
+import type { CommandResult } from "./index.js";
 import { CLIError } from "../errors.js";
 import { runHealthWithOutput, type HealthOptions } from "../health/index.js";
 
@@ -26,7 +27,7 @@ function parseHealthOptions(args: ParsedArgs): HealthOptions {
 /**
  * Run the health command
  */
-export async function runHealthCommand(args: ParsedArgs): Promise<number> {
+export async function runHealthCommand(args: ParsedArgs): Promise<CommandResult> {
   // Get path from positional args
   const path = args.positional[0];
   if (!path) {
@@ -43,10 +44,7 @@ export async function runHealthCommand(args: ParsedArgs): Promise<number> {
   try {
     const { output, exitCode } = await runHealthWithOutput(path, options);
 
-    // Print output
-    console.log(output);
-
-    return exitCode;
+    return { exitCode, stdout: output };
   } catch (err) {
     if (err instanceof Error) {
       if (err.message.includes("ENOENT") || err.message.includes("does not exist")) {

@@ -2,30 +2,54 @@
  * Crawl Orchestrator
  *
  * Main entry point for the crawl functionality.
+ * Accepts a manifest URL (llms.txt, llms-full.txt, or sitemap.xml)
+ * and fetches/converts the listed pages.
  */
 
 import type { CrawlOptions, CrawlMetadata } from "./types.js";
-import { fetchUrl, isValidUrl, getOrigin, isSameOrigin } from "./fetcher.js";
+import { fetchUrl, isValidUrl, isSameOrigin } from "./fetcher.js";
 import { isUrlAllowed, getCrawlDelay } from "./robots.js";
 import { processContent } from "./converter.js";
-import { detectLlmsTxt, isLlmsTxtUrl, parseLlmsTxt, extractUrls } from "./llms-txt.js";
+import { isLlmsTxtUrl, isLlmsFullUrl, parseLlmsTxt, extractUrls } from "./llms-txt.js";
+import { isSitemapUrl, parseSitemap } from "./sitemap.js";
 import { CrawlQueue } from "./queue.js";
-import { extractLinks, processLinks, normalizePatterns } from "./links.js";
+import { filterByPatterns, normalizePatterns } from "./links.js";
 import { CrawlStorage, computeHash } from "./storage.js";
 import { ProgressReporter } from "./progress.js";
 import { CrawlError } from "../errors.js";
 
 export type { CrawlOptions, CrawlMetadata } from "./types.js";
 
+type ManifestType = 'llms-full' | 'llms-txt' | 'sitemap';
+
 /**
- * Crawl a URL and its linked pages
+ * Detect manifest type from URL
+ */
+function detectManifestType(url: string): ManifestType | null {
+  // Check llms-full before llms-txt (both end with llms.txt)
+  if (isLlmsFullUrl(url)) return 'llms-full';
+  if (isLlmsTxtUrl(url)) return 'llms-txt';
+  if (isSitemapUrl(url)) return 'sitemap';
+  return null;
+}
+
+/**
+ * Crawl documentation from a manifest URL
  */
 export async function crawl(options: CrawlOptions): Promise<CrawlMetadata> {
-  const { url, depth, dryRun, include, exclude, verbose, quiet } = options;
+  const { url, dryRun, include, exclude, verbose, quiet } = options;
 
   // Validate URL
   if (!isValidUrl(url)) {
     throw new CrawlError(`Invalid URL: ${url}`);
+  }
+
+  // Detect manifest type
+  const manifestType = detectManifestType(url);
+  if (!manifestType) {
+    throw new CrawlError(
+      `URL must point to an llms.txt, llms-full.txt, or sitemap.xml file.\n\nExamples:\n  lrn crawl https://docs.example.com/llms.txt\n  lrn crawl https://docs.example.com/llms-full.txt\n  lrn crawl https://example.com/sitemap.xml`
+    );
   }
 
   // Normalize patterns
@@ -33,67 +57,50 @@ export async function crawl(options: CrawlOptions): Promise<CrawlMetadata> {
   const excludePatterns = normalizePatterns(exclude);
 
   // Initialize components
-  const queue = new CrawlQueue(options);
   const storage = new CrawlStorage(url, options);
   const progress = new ProgressReporter({ quiet, verbose });
+  storage.setSource(manifestType);
+
+  // Handle llms-full.txt — single file download
+  if (manifestType === 'llms-full') {
+    return handleLlmsFull(url, storage, progress, dryRun);
+  }
+
+  // Extract URLs from manifest
+  let manifestUrls: string[];
+  if (manifestType === 'llms-txt') {
+    manifestUrls = await extractLlmsTxtUrls(url, progress);
+  } else {
+    manifestUrls = await extractSitemapUrlsFromManifest(url, progress, quiet);
+  }
+
+  // Apply include/exclude filters
+  if (includePatterns.length > 0 || excludePatterns.length > 0) {
+    manifestUrls = filterByPatterns(manifestUrls, includePatterns, excludePatterns);
+  }
+
+  // Handle dry-run mode
+  if (dryRun) {
+    progress.dryRun(manifestUrls);
+    return storage.getMeta();
+  }
+
+  // Initialize queue and storage
+  const queue = new CrawlQueue(options);
+  storage.init();
 
   // Check robots.txt crawl-delay
   const robotsDelay = await getCrawlDelay(url);
   if (robotsDelay && robotsDelay > 1 / options.rate) {
     queue.setRate(1 / robotsDelay);
     if (!quiet) {
-      console.log(`Respecting robots.txt crawl-delay: ${robotsDelay}s`);
+      process.stderr.write(`Respecting robots.txt crawl-delay: ${robotsDelay}s\n`);
     }
   }
 
-  // Check for llms.txt
-  let llmsTxtUrls: string[] | null = null;
-
-  if (isLlmsTxtUrl(url)) {
-    // Direct llms.txt URL
-    try {
-      const result = await fetchUrl(url);
-      const llmsTxt = parseLlmsTxt(result.body);
-      llmsTxtUrls = extractUrls(llmsTxt, url);
-      storage.setLlmsTxt(true);
-      progress.foundLlmsTxt(llmsTxtUrls.length);
-    } catch (err) {
-      throw new CrawlError(
-        `Failed to fetch llms.txt: ${err instanceof Error ? err.message : String(err)}`,
-        url
-      );
-    }
-  } else {
-    // Try to detect llms.txt at root
-    const llmsTxt = await detectLlmsTxt(url);
-    if (llmsTxt) {
-      llmsTxtUrls = extractUrls(llmsTxt, url);
-      storage.setLlmsTxt(true);
-      progress.foundLlmsTxt(llmsTxtUrls.length);
-    }
-  }
-
-  // Add initial URLs to queue
-  if (llmsTxtUrls) {
-    // Use URLs from llms.txt
-    queue.addAll(llmsTxtUrls, 0);
-    progress.setTotal(llmsTxtUrls.length);
-  } else {
-    // Start with the given URL
-    queue.add(url, 0);
-    progress.setTotal(1);
-  }
-
-  // Handle dry-run mode
-  if (dryRun) {
-    // For dry-run, we need to discover all URLs that would be crawled
-    const allUrls = await discoverUrls(queue, options, includePatterns, excludePatterns, progress);
-    progress.dryRun(allUrls);
-    return storage.getMeta();
-  }
-
-  // Initialize storage
-  storage.init();
+  // Add manifest URLs to queue
+  queue.addAll(manifestUrls);
+  progress.setTotal(manifestUrls.length);
 
   // Process queue
   while (!queue.isEmpty) {
@@ -136,22 +143,6 @@ export async function crawl(options: CrawlOptions): Promise<CrawlMetadata> {
       // Save the page
       storage.savePage(item.url, markdown, title);
       progress.completeUrl(item.url);
-
-      // Extract and queue links if not at max depth
-      if (item.depth < depth) {
-        const links = extractLinks(markdown, result.finalUrl);
-        const filtered = processLinks(
-          links,
-          result.finalUrl,
-          includePatterns,
-          excludePatterns
-        );
-
-        const added = queue.addAll(filtered, item.depth + 1, item.url);
-        if (added > 0) {
-          progress.addToTotal(added);
-        }
-      }
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       const statusCode = err instanceof CrawlError ? err.statusCode : undefined;
@@ -181,58 +172,80 @@ export async function crawl(options: CrawlOptions): Promise<CrawlMetadata> {
 }
 
 /**
- * Discover all URLs that would be crawled (for dry-run)
+ * Handle llms-full.txt — download a single pre-concatenated file
  */
-async function discoverUrls(
-  queue: CrawlQueue,
-  options: CrawlOptions,
-  includePatterns: string[],
-  excludePatterns: string[],
-  progress: ProgressReporter
-): Promise<string[]> {
-  const discovered: string[] = [];
-  const { depth } = options;
-
-  while (!queue.isEmpty) {
-    const item = await queue.next();
-    if (!item) break;
-
-    try {
-      // Check robots.txt
-      const allowed = await isUrlAllowed(item.url);
-      if (!allowed) {
-        progress.skipUrl(item.url, "robots.txt");
-        continue;
-      }
-
-      discovered.push(item.url);
-
-      // If we need to discover more links, fetch the page
-      if (item.depth < depth) {
-        const result = await fetchUrl(item.url);
-        const { markdown } = processContent(
-          result.body,
-          result.contentType,
-          result.finalUrl
-        );
-
-        const links = extractLinks(markdown, result.finalUrl);
-        const filtered = processLinks(
-          links,
-          result.finalUrl,
-          includePatterns,
-          excludePatterns
-        );
-
-        queue.addAll(filtered, item.depth + 1, item.url);
-      }
-    } catch {
-      // Skip errors in dry-run, just add the URL
-      discovered.push(item.url);
-    }
+async function handleLlmsFull(
+  url: string,
+  storage: CrawlStorage,
+  progress: ProgressReporter,
+  dryRun: boolean
+): Promise<CrawlMetadata> {
+  if (dryRun) {
+    progress.dryRun([url]);
+    return storage.getMeta();
   }
 
-  return discovered;
+  progress.setTotal(1);
+  progress.startUrl(url);
+
+  try {
+    const result = await fetchUrl(url);
+    storage.init();
+    storage.savePage(url, result.body, undefined);
+    storage.saveMeta();
+    progress.completeUrl(url);
+    progress.summary(storage.getDir());
+  } catch (err) {
+    throw new CrawlError(
+      `Failed to fetch llms-full.txt: ${err instanceof Error ? err.message : String(err)}`,
+      url
+    );
+  }
+
+  return storage.getMeta();
+}
+
+/**
+ * Extract URLs from an llms.txt manifest
+ */
+async function extractLlmsTxtUrls(
+  url: string,
+  progress: ProgressReporter
+): Promise<string[]> {
+  try {
+    const result = await fetchUrl(url);
+    const llmsTxt = parseLlmsTxt(result.body);
+    const urls = extractUrls(llmsTxt, url);
+    progress.foundLlmsTxt(urls.length);
+    return urls;
+  } catch (err) {
+    throw new CrawlError(
+      `Failed to fetch llms.txt: ${err instanceof Error ? err.message : String(err)}`,
+      url
+    );
+  }
+}
+
+/**
+ * Extract URLs from a sitemap manifest
+ */
+async function extractSitemapUrlsFromManifest(
+  url: string,
+  progress: ProgressReporter,
+  quiet: boolean
+): Promise<string[]> {
+  try {
+    const urls = await parseSitemap(url);
+    if (!quiet) {
+      process.stderr.write(`Found ${urls.length} URLs in sitemap\n`);
+    }
+    return urls;
+  } catch (err) {
+    throw new CrawlError(
+      `Failed to fetch sitemap: ${err instanceof Error ? err.message : String(err)}`,
+      url
+    );
+  }
 }
 
 // Re-export for convenience
