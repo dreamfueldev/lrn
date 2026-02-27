@@ -226,6 +226,43 @@ describe("lrn teach", () => {
     });
   });
 
+  describe("project config scoping", () => {
+    it("only includes packages listed in lrn.config.json", async () => {
+      const tmpDir = mkdtempSync(join(tmpdir(), "lrn-teach-"));
+      const configPath = join(tmpDir, "lrn.config.json");
+      writeFileSync(
+        configPath,
+        JSON.stringify({
+          packages: { mathlib: "latest", uikit: "latest" },
+        })
+      );
+
+      const result = await runCLI(
+        ["teach", "--config", configPath],
+        { env: { LRN_CACHE: cacheDir } }
+      );
+      expect(result.exitCode).toBe(0);
+      expect(result.stdout).toContain("### mathlib");
+      expect(result.stdout).toContain("### uikit");
+      expect(result.stdout).not.toContain("### acme-api");
+      expect(result.stdout).not.toContain("### mycli");
+      expect(result.stdout).not.toContain("### infra-aws");
+
+      rmSync(tmpDir, { recursive: true, force: true });
+    });
+
+    it("falls back to all packages when config has no packages", async () => {
+      const result = await run(["teach"]);
+      expect(result.exitCode).toBe(0);
+      // All 5 fixture packages should be present
+      expect(result.stdout).toContain("### acme-api");
+      expect(result.stdout).toContain("### mathlib");
+      expect(result.stdout).toContain("### uikit");
+      expect(result.stdout).toContain("### mycli");
+      expect(result.stdout).toContain("### infra-aws");
+    });
+  });
+
   describe("no packages", () => {
     it("returns informative message when no packages found", async () => {
       const emptyCache = createTestCache([]);

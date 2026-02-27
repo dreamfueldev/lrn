@@ -9,7 +9,7 @@
 import { readFileSync, writeFileSync, existsSync } from "node:fs";
 import type { ParsedArgs } from "../args.js";
 import type { ResolvedConfig } from "../config.js";
-import { loadAllPackages } from "../cache.js";
+import { loadAllPackages, loadProjectPackages } from "../cache.js";
 import { generateBlurb } from "../orientation.js";
 
 const START_MARKER = "<!-- LRN-START -->";
@@ -50,7 +50,10 @@ Use good judgment: survey broadly when exploring, target precisely when
 you know what you need.`;
 
 export function runTeach(args: ParsedArgs, config: ResolvedConfig): string {
-  const allPackages = loadAllPackages(config);
+  const configPackageNames = Object.keys(config.packages);
+  const allPackages = configPackageNames.length > 0
+    ? loadProjectPackages(config)
+    : loadAllPackages(config);
 
   // Filter by --packages if provided
   let packages = allPackages;

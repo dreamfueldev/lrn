@@ -223,6 +223,28 @@ export function loadAllPackages(config: ResolvedConfig): Package[] {
 }
 
 /**
+ * Load only packages listed in config.packages
+ *
+ * Iterates over config.packages entries and loads each using loadPackage(),
+ * which handles both path-based and cache-based resolution.
+ * Packages that fail to load (not cached yet, etc.) are silently skipped.
+ */
+export function loadProjectPackages(config: ResolvedConfig): Package[] {
+  const names = Object.keys(config.packages);
+  if (names.length === 0) return [];
+
+  const packages: Package[] = [];
+  for (const name of names) {
+    try {
+      packages.push(loadPackage(config, name));
+    } catch {
+      // Skip packages that fail to load (not cached yet, etc.)
+    }
+  }
+  return packages.sort((a, b) => a.name.localeCompare(b.name));
+}
+
+/**
  * Check if a package exists in cache
  */
 export function packageExists(config: ResolvedConfig, name: string): boolean {
