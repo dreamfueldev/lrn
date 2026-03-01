@@ -534,6 +534,9 @@ export interface LrnConfig {
 
   /** Default output format */
   defaultFormat?: "text" | "json" | "markdown" | "summary";
+
+  /** Enable automatic update checks (default: true) */
+  updateCheck?: boolean;
 }
 
 /**

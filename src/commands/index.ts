@@ -39,6 +39,7 @@ import { runRemove } from "./remove.js";
 import { runSync } from "./sync.js";
 import { runVersions } from "./versions.js";
 import { runTeach } from "./teach.js";
+import { runUpdate } from "./update.js";
 
 export interface CommandResult {
   exitCode: number;
@@ -161,6 +162,9 @@ export async function runCommand(args: ParsedArgs): Promise<CommandResult> {
 
       case "teach":
         return { exitCode: 0, stdout: runTeach(args, config) };
+
+      case "update":
+        return { exitCode: 0, stdout: await runUpdate(args, config) };
 
       default:
         // Check if this might be a member path (contains dots or positional[0] exists)

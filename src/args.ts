@@ -30,6 +30,7 @@ export interface ParsedArgs {
     noConfig: boolean;
     force: boolean;
     saveToPackageJson: boolean;
+    check: boolean;
   };
 
   /** Value options */
@@ -84,6 +85,7 @@ export function parseArgs(argv: string[]): ParsedArgs {
       noConfig: false,
       force: false,
       saveToPackageJson: false,
+      check: false,
     },
     options: {
       format: undefined,
@@ -194,6 +196,11 @@ export function parseArgs(argv: string[]): ParsedArgs {
       i++;
       continue;
     }
+    if (arg === "--check") {
+      result.flags.check = true;
+      i++;
+      continue;
+    }
 
     // Value options
     if (arg === "--format" && i + 1 < args.length) {
@@ -289,7 +296,7 @@ function interpretPositionalArgs(result: ParsedArgs): void {
   const first = pos[0]!;
 
   // Global commands (no package context)
-  const globalCommands = ["sync", "add", "remove", "versions", "search", "parse", "format", "crawl", "health", "llms-full", "login", "logout", "status", "pull", "teach"];
+  const globalCommands = ["sync", "add", "remove", "versions", "search", "parse", "format", "crawl", "health", "llms-full", "login", "logout", "status", "pull", "teach", "update"];
   if (globalCommands.includes(first)) {
     result.command = first;
     result.positional = pos.slice(1);
@@ -409,6 +416,8 @@ export function getUnknownFlags(args: ParsedArgs): string[] {
     "--fix",
     // Registry command flags
     "--force",
+    // Update command flags
+    "--check",
   ]);
 
   const unknownFlags: string[] = [];

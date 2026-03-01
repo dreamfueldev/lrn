@@ -108,6 +108,7 @@ interface Guide {
 lrn                            # List all cached packages
 lrn sync                       # Sync specs for project dependencies
 lrn teach                      # Generate agent orientation and strategy
+lrn update                     # Self-update to latest version
 lrn <package>                  # Show package overview
 lrn <package> list             # List members
 lrn <package> <member.path>    # Show member details

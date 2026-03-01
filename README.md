@@ -126,6 +126,8 @@ lrn sync                              # Sync all packages from config
 lrn pull <package>[@version]          # Download without updating config
 lrn remove <package>                  # Remove from config
 lrn versions <package>                # List available versions
+lrn update                            # Self-update to latest version
+lrn update --check                    # Check for updates without installing
 ```
 
 ### Agent integration

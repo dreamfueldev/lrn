@@ -28,6 +28,8 @@ export interface ResolvedConfig {
   defaultFormat: "text" | "json" | "markdown" | "summary";
   /** Package specifications */
   packages: Record<string, PackageSpec>;
+  /** Enable automatic update checks */
+  updateCheck: boolean;
 }
 
 /**
@@ -38,6 +40,7 @@ const DEFAULT_CONFIG: ResolvedConfig = {
   cache: join(homedir(), ".lrn"),
   defaultFormat: "text",
   packages: {},
+  updateCheck: true,
 };
 
 /**
@@ -228,6 +231,7 @@ function mergeConfig(base: ResolvedConfig, source: LrnConfig): ResolvedConfig {
       ...base.packages,
       ...source.packages,
     },
+    updateCheck: source.updateCheck !== undefined ? source.updateCheck : base.updateCheck,
   };
 }
 
@@ -250,6 +254,10 @@ function applyEnvVars(config: ResolvedConfig): ResolvedConfig {
     if (["text", "json", "markdown", "summary"].includes(format)) {
       result.defaultFormat = format as ResolvedConfig["defaultFormat"];
     }
+  }
+
+  if (process.env.LRN_NO_UPDATE_CHECK === "1") {
+    result.updateCheck = false;
   }
 
   return result;
