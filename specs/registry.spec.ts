@@ -9,6 +9,7 @@ import {
 import { readCacheIndex, updateCacheIndex } from "../src/cache-index.js";
 import { RegistryClient } from "../src/registry.js";
 import { RegistryAuthError } from "../src/errors.js";
+import { shouldAutoSelect } from "../src/resolve.js";
 import { mkdirSync, readFileSync, statSync, existsSync } from "node:fs";
 import { join } from "node:path";
 
@@ -593,6 +594,231 @@ describe("Registry Commands", () => {
 
       const client = new RegistryClient("https://uselrn.dev", "tok");
       await expect(client.getPackage("stripe.com/stripe")).rejects.toThrow("connect");
+    });
+  });
+
+  // --- Fuzzy Resolution ---
+
+  describe("fuzzy resolution", () => {
+    it("shouldAutoSelect returns true for single result", () => {
+      const results = [
+        { domain: "dev.react", name: "react", fullName: "dev.react/react", description: "React", classification: "library", score: 350 },
+      ];
+      expect(shouldAutoSelect(results)).toBe(true);
+    });
+
+    it("shouldAutoSelect returns true for empty results", () => {
+      expect(shouldAutoSelect([])).toBe(true);
+    });
+
+    it("shouldAutoSelect returns true when top score >= 2x second", () => {
+      const results = [
+        { domain: "dev.react", name: "react", fullName: "dev.react/react", description: "React", classification: "library", score: 350 },
+        { domain: "com.reactnative", name: "react-native", fullName: "com.reactnative/react-native", description: "React Native", classification: "library", score: 60 },
+      ];
+      expect(shouldAutoSelect(results)).toBe(true);
+    });
+
+    it("shouldAutoSelect returns false when scores are close", () => {
+      const results = [
+        { domain: "com.better-auth", name: "better-auth", fullName: "com.better-auth/better-auth", description: "Auth framework", classification: "library", score: 90 },
+        { domain: "com.firebase", name: "firebase-auth", fullName: "com.firebase/firebase-auth", description: "Firebase Auth", classification: "api", score: 85 },
+      ];
+      expect(shouldAutoSelect(results)).toBe(false);
+    });
+
+    it("lrn add with slash bypasses resolution", async () => {
+      writeCredentials(cacheDir, { registry: "https://uselrn.dev", token: "tok_admin", user: "Admin" });
+
+      const tarData = await createTestTarGz({ name: "react", version: "18.0.0", members: [], guides: [], schemas: {} });
+
+      globalThis.fetch = mock((url: string | URL | Request) => {
+        const u = typeof url === "string" ? url : url instanceof URL ? url.toString() : url.url;
+
+        // Should never call /resolve since name has a slash
+        if (u.includes("/resolve")) {
+          throw new Error("Should not call resolve for domain/name input");
+        }
+
+        if (u.includes("/packages/dev.react/react@")) {
+          return Promise.resolve(
+            makeJson({
+              package: { domain: "dev.react", name: "react" },
+              version: {
+                version: "18.0.0",
+                publishedAt: "2024-01-01T00:00:00Z",
+                size: tarData.byteLength,
+                checksum: `sha256:${computeSha256(tarData)}`,
+                memberCount: 1,
+                guideCount: 0,
+              },
+              downloadUrl: "https://r2.example.com/react.tar.gz",
+            })
+          );
+        }
+
+        if (u.includes("/packages/dev.react/react")) {
+          return Promise.resolve(
+            makeJson({
+              package: { domain: "dev.react", name: "react" },
+              versions: [{
+                version: "18.0.0",
+                publishedAt: "2024-01-01T00:00:00Z",
+                size: tarData.byteLength,
+                checksum: `sha256:${computeSha256(tarData)}`,
+                memberCount: 1,
+                guideCount: 0,
+              }],
+            })
+          );
+        }
+
+        if (u.includes("r2.example.com")) {
+          return Promise.resolve(makeResponse(tarData));
+        }
+
+        return Promise.resolve(makeJson({ error: "not found" }, 404));
+      }) as typeof globalThis.fetch;
+
+      const result = await runCLI(["add", "dev.react/react"], { env: { LRN_CACHE: cacheDir } });
+      expect(result.exitCode).toBe(0);
+    });
+
+    it("lrn add without slash auto-selects clear winner", async () => {
+      writeCredentials(cacheDir, { registry: "https://uselrn.dev", token: "tok_admin", user: "Admin" });
+
+      const tarData = await createTestTarGz({ name: "react", version: "18.0.0", members: [], guides: [], schemas: {} });
+
+      globalThis.fetch = mock((url: string | URL | Request) => {
+        const u = typeof url === "string" ? url : url instanceof URL ? url.toString() : url.url;
+
+        if (u.includes("/resolve")) {
+          return Promise.resolve(
+            makeJson({
+              results: [
+                { domain: "dev.react", name: "react", fullName: "dev.react/react", description: "React UI library", classification: "library", score: 350 },
+                { domain: "com.reactnative", name: "react-native", fullName: "com.reactnative/react-native", description: "React Native", classification: "library", score: 60 },
+              ],
+            })
+          );
+        }
+
+        if (u.includes("/packages/dev.react/react@")) {
+          return Promise.resolve(
+            makeJson({
+              package: { domain: "dev.react", name: "react" },
+              version: {
+                version: "18.0.0",
+                publishedAt: "2024-01-01T00:00:00Z",
+                size: tarData.byteLength,
+                checksum: `sha256:${computeSha256(tarData)}`,
+                memberCount: 1,
+                guideCount: 0,
+              },
+              downloadUrl: "https://r2.example.com/react.tar.gz",
+            })
+          );
+        }
+
+        if (u.includes("/packages/dev.react/react")) {
+          return Promise.resolve(
+            makeJson({
+              package: { domain: "dev.react", name: "react" },
+              versions: [{
+                version: "18.0.0",
+                publishedAt: "2024-01-01T00:00:00Z",
+                size: tarData.byteLength,
+                checksum: `sha256:${computeSha256(tarData)}`,
+                memberCount: 1,
+                guideCount: 0,
+              }],
+            })
+          );
+        }
+
+        if (u.includes("r2.example.com")) {
+          return Promise.resolve(makeResponse(tarData));
+        }
+
+        return Promise.resolve(makeJson({ error: "not found" }, 404));
+      }) as typeof globalThis.fetch;
+
+      const result = await runCLI(["add", "react"], { env: { LRN_CACHE: cacheDir } });
+      expect(result.exitCode).toBe(0);
+      expect(result.stdout).toContain("dev.react/react");
+    });
+
+    it("lrn add without auth shows login prompt", async () => {
+      // No credentials written
+      const result = await runCLI(["add", "react"], { env: { LRN_CACHE: cacheDir } });
+      expect(result.exitCode).not.toBe(0);
+      expect(result.stderr).toContain("Not logged in");
+    });
+
+    it("lrn add nonexistent shows no packages match", async () => {
+      writeCredentials(cacheDir, { registry: "https://uselrn.dev", token: "tok", user: "u" });
+
+      globalThis.fetch = mock((url: string | URL | Request) => {
+        const u = typeof url === "string" ? url : url instanceof URL ? url.toString() : url.url;
+
+        if (u.includes("/resolve")) {
+          return Promise.resolve(makeJson({ results: [] }));
+        }
+
+        return Promise.resolve(makeJson({ error: "not found" }, 404));
+      }) as typeof globalThis.fetch;
+
+      const result = await runCLI(["add", "nonexistent-pkg-xyz"], { env: { LRN_CACHE: cacheDir } });
+      expect(result.exitCode).not.toBe(0);
+      expect(result.stderr).toContain("No packages match");
+    });
+
+    it("lrn search falls back to registry when no local results", async () => {
+      writeCredentials(cacheDir, { registry: "https://uselrn.dev", token: "tok", user: "u" });
+
+      globalThis.fetch = mock((url: string | URL | Request) => {
+        const u = typeof url === "string" ? url : url instanceof URL ? url.toString() : url.url;
+
+        if (u.includes("/resolve")) {
+          return Promise.resolve(
+            makeJson({
+              results: [
+                { domain: "dev.react", name: "react", fullName: "dev.react/react", description: "React UI library", classification: "library", score: 350 },
+              ],
+            })
+          );
+        }
+
+        return Promise.resolve(makeJson({ error: "not found" }, 404));
+      }) as typeof globalThis.fetch;
+
+      const result = await runCLI(["search", "xyznonexistent"], { env: { LRN_CACHE: cacheDir } });
+      expect(result.exitCode).toBe(0);
+      expect(result.stdout).toContain("Found in registry");
+      expect(result.stdout).toContain("dev.react/react");
+      expect(result.stdout).toContain("lrn add");
+    });
+
+    it("RegistryClient.resolve calls /resolve endpoint", async () => {
+      let calledUrl = "";
+      globalThis.fetch = mock((url: string | URL | Request) => {
+        const u = typeof url === "string" ? url : url instanceof URL ? url.toString() : url.url;
+        calledUrl = u;
+        return Promise.resolve(
+          makeJson({
+            results: [
+              { domain: "dev.react", name: "react", fullName: "dev.react/react", description: "React", classification: "library", score: 350 },
+            ],
+          })
+        );
+      }) as typeof globalThis.fetch;
+
+      const client = new RegistryClient("https://uselrn.dev", "tok");
+      const results = await client.resolve("react");
+      expect(calledUrl).toContain("/resolve");
+      expect(calledUrl).toContain("q=react");
+      expect(results).toHaveLength(1);
+      expect(results[0]!.fullName).toBe("dev.react/react");
     });
   });
 

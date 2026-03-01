@@ -15,7 +15,7 @@ export async function runStatus(_args: ParsedArgs, config: ResolvedConfig): Prom
     return "Not logged in.\nRun 'lrn login' to authenticate.";
   }
 
-  const client = new RegistryClient(config.registry, creds.token);
+  const client = new RegistryClient(creds.registry || config.registry, creds.token);
   const me = await client.getMe();
 
   if (!me) {

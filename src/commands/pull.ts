@@ -33,7 +33,7 @@ export async function runPull(args: ParsedArgs, config: ResolvedConfig): Promise
 
   // 2. Require auth
   const creds = requireToken(config.cache);
-  const client = new RegistryClient(config.registry, creds.token);
+  const client = new RegistryClient(creds.registry || config.registry, creds.token);
 
   // 3. Resolve version
   let version = requestedVersion;

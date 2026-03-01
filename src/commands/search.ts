@@ -17,8 +17,10 @@ import {
   type SearchResult,
 } from "../format/index.js";
 import { ArgumentError } from "../errors.js";
+import { readCredentials } from "../credentials.js";
+import { RegistryClient } from "../registry.js";
 
-export function runSearch(args: ParsedArgs, config: ResolvedConfig): string {
+export async function runSearch(args: ParsedArgs, config: ResolvedConfig): Promise<string> {
   const query = args.positional[0] || "";
   const packageName = args.package;
 
@@ -59,6 +61,27 @@ export function runSearch(args: ParsedArgs, config: ResolvedConfig): string {
 
   if (!args.flags.deprecated) {
     results = results.filter((r) => !r.deprecated);
+  }
+
+  // Registry fallback for global search with no local results
+  if (results.length === 0 && !packageName) {
+    const creds = readCredentials(config.cache);
+    if (creds) {
+      try {
+        const client = new RegistryClient(creds.registry || config.registry, creds.token);
+        const registryResults = await client.resolve(query);
+        if (registryResults.length > 0) {
+          let output = `No local results. Found in registry:\n\n`;
+          for (const r of registryResults) {
+            output += `  ${r.fullName} — ${r.description}\n`;
+          }
+          output += `\nRun lrn add <package> to install.`;
+          return output;
+        }
+      } catch {
+        // Registry fallback is best-effort
+      }
+    }
   }
 
   const searchResults: SearchResults = {

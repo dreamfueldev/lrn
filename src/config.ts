@@ -34,7 +34,7 @@ export interface ResolvedConfig {
  * Default configuration values
  */
 const DEFAULT_CONFIG: ResolvedConfig = {
-  registry: "https://uselrn.dev",
+  registry: "https://api.uselrn.dev",
   cache: join(homedir(), ".lrn"),
   defaultFormat: "text",
   packages: {},

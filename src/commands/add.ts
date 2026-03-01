@@ -5,7 +5,7 @@
  */
 
 import { existsSync } from "node:fs";
-import { resolve } from "node:path";
+import { resolve as resolvePath } from "node:path";
 import { basename } from "node:path";
 import type { ParsedArgs } from "../args.js";
 import { parsePackageSpec } from "../args.js";
@@ -16,7 +16,10 @@ import {
   getConfigDir,
 } from "../config.js";
 import type { PackageSpec } from "../schema/index.js";
-import { ArgumentError } from "../errors.js";
+import { ArgumentError, RegistryAuthError } from "../errors.js";
+import { readCredentials } from "../credentials.js";
+import { RegistryClient } from "../registry.js";
+import { shouldAutoSelect, disambiguate } from "../resolve.js";
 import { runPull } from "./pull.js";
 
 export async function runAdd(
@@ -42,7 +45,33 @@ export async function runAdd(
     );
   }
 
-  const { name, version } = parsePackageSpec(raw);
+  let { name, version } = parsePackageSpec(raw);
+
+  // Fuzzy resolution: if no slash, resolve via registry
+  if (!name.includes("/") && !pathOpt && !urlOpt) {
+    const creds = readCredentials(config.cache);
+    if (!creds) {
+      throw new RegistryAuthError();
+    }
+    const client = new RegistryClient(creds.registry || config.registry, creds.token);
+    const results = await client.resolve(name);
+
+    if (results.length === 0) {
+      throw new ArgumentError(
+        `No packages match "${name}".`,
+        "Check spelling or browse the registry."
+      );
+    }
+
+    if (shouldAutoSelect(results)) {
+      name = results[0]!.fullName;
+    } else {
+      const selected = await disambiguate(name, results);
+      if (!selected) return "Cancelled.";
+      name = selected;
+    }
+  }
+
   const target = resolveWriteTarget(args.flags.saveToPackageJson);
 
   // Build the package spec
@@ -51,7 +80,7 @@ export async function runAdd(
 
   if (pathOpt) {
     // Resolve relative to cwd
-    const resolvedPath = resolve(process.cwd(), pathOpt);
+    const resolvedPath = resolvePath(process.cwd(), pathOpt);
     if (!existsSync(resolvedPath)) {
       throw new ArgumentError(
         `File not found: ${pathOpt}`,
@@ -83,7 +112,7 @@ export async function runAdd(
       // Set up args for pull
       const pullArgs: ParsedArgs = {
         ...args,
-        positional: [raw],
+        positional: [version ? `${name}@${version}` : name],
         command: "pull",
       };
       await runPull(pullArgs, config);
