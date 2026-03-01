@@ -1,6 +1,6 @@
 {
   "name": "lrn",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Universal CLI for learning and querying programming interfaces",
   "type": "module",
   "bin": {

@@ -1,12 +1,16 @@
 # Changelog
 
-## 0.2.0 (Unreleased)
+## 0.2.0 (2026-03-01)
 
 ### Added
 
 - Fuzzy package resolution — `lrn add react` resolves to `dev.react/react` without requiring exact domain/name
 - Interactive disambiguation when multiple packages match a query
 - Registry search fallback — `lrn search` queries the registry when no local results found
+- `lrn update` command — self-update to latest version with SHA-256 checksum verification
+- Background update check on every CLI invocation (1-hour throttle) with boxed notification
+- `lrn update --check` to check for updates without installing
+- `updateCheck` config option and `LRN_NO_UPDATE_CHECK=1` env var to disable update checks
 
 ## 0.1.0 (2026-02-26)
 
