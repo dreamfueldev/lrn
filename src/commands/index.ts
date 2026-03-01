@@ -111,7 +111,7 @@ export async function runCommand(args: ParsedArgs): Promise<CommandResult> {
         return { exitCode: 0, stdout: runType(args, config) };
 
       case "search":
-        return { exitCode: 0, stdout: runSearch(args, config) };
+        return { exitCode: 0, stdout: await runSearch(args, config) };
 
       case "sync":
         return { exitCode: 0, stdout: await runSync(args, config) };

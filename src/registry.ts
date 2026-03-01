@@ -76,6 +76,15 @@ export interface VersionInfo {
   downloadUrl?: string;
 }
 
+export interface ResolveResult {
+  domain: string;
+  name: string;
+  fullName: string;
+  description: string;
+  classification: string;
+  score: number;
+}
+
 export class RegistryClient {
   private baseUrl: string;
   private token?: string;
@@ -166,6 +175,15 @@ export class RegistryClient {
     });
     this.handleErrorStatus(res);
     return (await res.json()) as VersionInfo;
+  }
+
+  /** Resolve a fuzzy package query to ranked candidates */
+  async resolve(query: string, limit = 5): Promise<ResolveResult[]> {
+    const params = new URLSearchParams({ q: query, limit: String(limit) });
+    const res = await this.fetch(`/resolve?${params}`, { method: "GET" });
+    this.handleErrorStatus(res);
+    const data = (await res.json()) as { results: ResolveResult[] };
+    return data.results;
   }
 
   /** Download a file from a presigned URL (no auth needed) */

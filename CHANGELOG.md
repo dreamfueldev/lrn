@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.2.0 (Unreleased)
+
+### Added
+
+- Fuzzy package resolution — `lrn add react` resolves to `dev.react/react` without requiring exact domain/name
+- Interactive disambiguation when multiple packages match a query
+- Registry search fallback — `lrn search` queries the registry when no local results found
+
 ## 0.1.0 (2026-02-26)
 
 Initial public release of `lrn` — a universal CLI for learning and querying programming interfaces.

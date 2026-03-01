@@ -18,7 +18,7 @@ export async function runVersions(args: ParsedArgs, config: ResolvedConfig): Pro
   }
 
   const creds = requireToken(config.cache);
-  const client = new RegistryClient(config.registry, creds.token);
+  const client = new RegistryClient(creds.registry || config.registry, creds.token);
   const info = await client.getPackage(name);
 
   const cacheIndex = readCacheIndex(config.cache);

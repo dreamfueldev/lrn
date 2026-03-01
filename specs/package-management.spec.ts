@@ -208,7 +208,8 @@ describe("Package Management", () => {
 
     it("package@version stores version spec", async () => {
       // This will fail the pull (no registry running) but should still store config
-      const result = await run(["add", "stripe@^2024.1.0"], {
+      // Use domain/name format since bare names now trigger fuzzy resolution
+      const result = await run(["add", "docs/stripe@^2024.1.0"], {
         cwd: tempDir,
         cacheDir,
       });
@@ -217,7 +218,7 @@ describe("Package Management", () => {
       const config = JSON.parse(
         readFileSync(join(tempDir, "lrn.config.json"), "utf-8")
       );
-      expect(config.packages.stripe).toBe("^2024.1.0");
+      expect(config.packages["docs/stripe"]).toBe("^2024.1.0");
     });
   });
 

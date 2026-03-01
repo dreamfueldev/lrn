@@ -131,6 +131,7 @@ General:
 
 Examples:
   lrn                           List cached packages
+  lrn add react                 Add package (resolves short name)
   lrn stripe                    Show Stripe API overview
   lrn stripe list               List Stripe endpoints
   lrn stripe charges.create     Show endpoint details
@@ -175,10 +176,11 @@ lrn add - Add a package to the project config
 Usage: lrn add <package>[@<version>] [options]
 
 Adds a package entry to the project config and pulls it from the registry.
+Short names are resolved automatically (e.g., "react" → "dev.react/react").
 Supports local file paths and remote URLs as alternatives to the registry.
 
 Arguments:
-  <package>           Package name (e.g., stripe, react)
+  <package>           Package name or domain/name (e.g., react, dev.react/react)
   @<version>          Optional version (semver range supported)
 
 Options:
@@ -188,8 +190,8 @@ Options:
   --registry <url>           Override registry URL
 
 Examples:
-  lrn add stripe                                        Add latest from registry
-  lrn add stripe@2024.1.0                               Add specific version
+  lrn add react                                         Resolves to dev.react/react
+  lrn add dev.react/react@18.0.0                        Add specific version
   lrn add internal-sdk --path ./docs/sdk.lrn.json       Add from local file
   lrn add custom-api --url https://example.com/api.json Add from URL
   lrn add react --save-to-package-json                  Write to package.json
