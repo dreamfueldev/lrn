@@ -31,3 +31,5 @@ coverage/
 
 # Astro
 .astro/
+
+lrn.config.json
