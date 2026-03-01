@@ -4,7 +4,7 @@
 
 ### Added
 
-- Fuzzy package resolution — `lrn add react` resolves to `npm/react` without requiring exact domain/name
+- Fuzzy package resolution — `lrn add react` resolves to `dev.react/react` without requiring exact domain/name
 - Interactive disambiguation when multiple packages match a query
 - Registry search fallback — `lrn search` queries the registry when no local results found
 
