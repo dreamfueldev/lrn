@@ -10,8 +10,9 @@ import { readCacheIndex, updateCacheIndex } from "../src/cache-index.js";
 import { RegistryClient } from "../src/registry.js";
 import { RegistryAuthError } from "../src/errors.js";
 import { shouldAutoSelect } from "../src/resolve.js";
-import { mkdirSync, readFileSync, statSync, existsSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, existsSync } from "node:fs";
 import { join } from "node:path";
+import { tmpdir } from "node:os";
 
 const originalFetch = globalThis.fetch;
 
@@ -33,16 +34,19 @@ function makeResponse(body: string | ArrayBuffer, status = 200, contentType = "a
 describe("Registry Commands", () => {
   let cacheDir: string;
   let cleanup: () => void;
+  let tempDir: string;
 
   beforeEach(() => {
     const cache = createTestCache([]);
     cacheDir = cache.cacheDir;
     cleanup = cache.cleanup;
+    tempDir = mkdtempSync(join(tmpdir(), "lrn-registry-"));
   });
 
   afterEach(() => {
     globalThis.fetch = originalFetch;
     cleanup();
+    rmSync(tempDir, { recursive: true, force: true });
   });
 
   // --- Credentials ---
@@ -680,8 +684,14 @@ describe("Registry Commands", () => {
         return Promise.resolve(makeJson({ error: "not found" }, 404));
       }) as typeof globalThis.fetch;
 
-      const result = await runCLI(["add", "dev.react/react"], { env: { LRN_CACHE: cacheDir } });
-      expect(result.exitCode).toBe(0);
+      const savedCwd = process.cwd();
+      process.chdir(tempDir);
+      try {
+        const result = await runCLI(["add", "dev.react/react"], { env: { LRN_CACHE: cacheDir } });
+        expect(result.exitCode).toBe(0);
+      } finally {
+        process.chdir(savedCwd);
+      }
     });
 
     it("lrn add without slash auto-selects clear winner", async () => {
@@ -743,9 +753,15 @@ describe("Registry Commands", () => {
         return Promise.resolve(makeJson({ error: "not found" }, 404));
       }) as typeof globalThis.fetch;
 
-      const result = await runCLI(["add", "react"], { env: { LRN_CACHE: cacheDir } });
-      expect(result.exitCode).toBe(0);
-      expect(result.stdout).toContain("dev.react/react");
+      const savedCwd = process.cwd();
+      process.chdir(tempDir);
+      try {
+        const result = await runCLI(["add", "react"], { env: { LRN_CACHE: cacheDir } });
+        expect(result.exitCode).toBe(0);
+        expect(result.stdout).toContain("dev.react/react");
+      } finally {
+        process.chdir(savedCwd);
+      }
     });
 
     it("lrn add without auth shows login prompt", async () => {
