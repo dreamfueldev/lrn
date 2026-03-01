@@ -70,6 +70,7 @@ Registry Commands:
   logout              Log out and remove stored credentials
   status              Show current login status
   pull <package>      Download a package from the registry
+  update              Update lrn to the latest version
 
 Authoring Commands:
   parse <directory>           Parse markdown directory to IR JSON
@@ -555,6 +556,25 @@ Examples:
   lrn teach --packages stripe,react      Only include specific packages
 `,
 
+  update: `
+lrn update - Update lrn to the latest version
+
+Usage: lrn update [options]
+
+Downloads the latest lrn binary from GitHub Releases,
+verifies its SHA-256 checksum, and replaces the current binary.
+
+Options:
+  --check             Only check for updates, don't install
+
+Environment:
+  LRN_NO_UPDATE_CHECK=1  Disable background update checks
+
+Examples:
+  lrn update              Update to latest version
+  lrn update --check      Check if an update is available
+`,
+
   pull: `
 lrn pull - Download a package from the registry
 
@@ -619,6 +639,7 @@ export function printUnknownCommand(command: string): string {
     "status",
     "pull",
     "teach",
+    "update",
   ];
   const similar = allCommands.filter(
     (c) => c.includes(command) || command.includes(c)

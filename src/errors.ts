@@ -244,6 +244,39 @@ export class RegistryRateLimitError extends CLIError {
 }
 
 /**
+ * Error for update failures
+ */
+export class UpdateError extends CLIError {
+  constructor(message: string, hint?: string) {
+    super(
+      message,
+      ExitCode.GENERAL_ERROR,
+      hint || "Run 'curl -fsSL https://uselrn.dev/install | sh' to install manually.",
+    );
+    this.name = "UpdateError";
+  }
+}
+
+/**
+ * Error for binary checksum verification failures during update
+ */
+export class BinaryChecksumError extends CLIError {
+  readonly expected: string;
+  readonly actual: string;
+
+  constructor(expected: string, actual: string) {
+    super(
+      `Binary checksum verification failed.\nExpected: ${expected}\nActual:   ${actual}`,
+      ExitCode.GENERAL_ERROR,
+      "The downloaded binary may be corrupted. Try again or install manually.",
+    );
+    this.name = "BinaryChecksumError";
+    this.expected = expected;
+    this.actual = actual;
+  }
+}
+
+/**
  * Error for checksum verification failures
  */
 export class ChecksumError extends CLIError {

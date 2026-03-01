@@ -39,6 +39,7 @@ Initial public release of `lrn` — a universal CLI for learning and querying pr
 - `lrn versions` — show available package versions
 - `lrn pull` — pull packages from registry
 - `lrn login` / `lrn logout` / `lrn status` — registry authentication (device flow)
+- `lrn update` — self-update to latest version with checksum verification
 - `lrn health` — connectivity and environment diagnostics
 - `lrn crawl` — crawl documentation sites via llms.txt
 - `lrn llms-full` — generate llms-full.txt output
