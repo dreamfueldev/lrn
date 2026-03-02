@@ -15,6 +15,7 @@ import type { ResolvedConfig } from "../config.js";
 import { requireToken } from "../credentials.js";
 import { updateCacheIndex } from "../cache-index.js";
 import { RegistryClient } from "../registry.js";
+import { shouldAutoSelect, disambiguate } from "../resolve.js";
 import {
   ArgumentError,
   ChecksumError,
@@ -29,13 +30,33 @@ export async function runPull(args: ParsedArgs, config: ResolvedConfig): Promise
     throw new ArgumentError("Missing package name.", "Usage: lrn pull <package>[@version]");
   }
 
-  const { name, version: requestedVersion } = parsePackageSpec(raw);
+  let { name, version: requestedVersion } = parsePackageSpec(raw);
 
   // 2. Require auth
   const creds = requireToken(config.cache);
   const client = new RegistryClient(creds.registry || config.registry, creds.token);
 
-  // 3. Resolve version
+  // 3. Fuzzy resolution: if no slash, resolve via registry
+  if (!name.includes("/")) {
+    const results = await client.resolve(name);
+
+    if (results.length === 0) {
+      throw new ArgumentError(
+        `No packages match "${name}".`,
+        "Check spelling or browse the registry."
+      );
+    }
+
+    if (shouldAutoSelect(results)) {
+      name = results[0]!.fullName;
+    } else {
+      const selected = await disambiguate(name, results);
+      if (!selected) return "Cancelled.";
+      name = selected;
+    }
+  }
+
+  // 4. Resolve version
   let version = requestedVersion;
   if (!version) {
     const pkg = await client.getPackage(name);
@@ -95,10 +116,12 @@ export async function runPull(args: ParsedArgs, config: ResolvedConfig): Promise
   }
 
   // 9. Update cache index
+  const aliases = versionInfo.package.aliases;
   updateCacheIndex(config.cache, name, {
     version,
     pulledAt: new Date().toISOString(),
     checksum: versionInfo.version.checksum || "",
+    ...(aliases && aliases.length > 0 ? { aliases } : {}),
   });
 
   // 10. Format size

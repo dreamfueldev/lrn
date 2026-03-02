@@ -47,6 +47,7 @@ export interface PackageInfo {
     name: string;
     description?: string;
     classification?: string;
+    aliases?: string[];
   };
   versions: Array<{
     version: string;
@@ -64,6 +65,7 @@ export interface VersionInfo {
     name: string;
     description?: string;
     classification?: string;
+    aliases?: string[];
   };
   version: {
     version: string;

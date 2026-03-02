@@ -11,6 +11,7 @@ export interface CacheEntry {
   version: string;
   pulledAt: string;
   checksum: string;
+  aliases?: string[];
 }
 
 export interface CacheIndex {

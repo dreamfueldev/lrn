@@ -98,32 +98,24 @@ export async function runAdd(
     sourceDesc = typeof spec === "string" ? spec : "latest";
   }
 
-  // Write to config
-  writePackageEntry(target, name, spec);
-
   const configName =
     target.type === "package.json"
       ? "package.json"
       : basename(target.path);
 
-  // For registry packages, attempt to pull
+  // For registry packages, pull first, then write config on success
   if (!pathOpt && !urlOpt) {
-    try {
-      // Set up args for pull
-      const pullArgs: ParsedArgs = {
-        ...args,
-        positional: [version ? `${name}@${version}` : name],
-        command: "pull",
-      };
-      await runPull(pullArgs, config);
-    } catch {
-      // Config entry persists even if pull fails
-      return `Added ${name}@${sourceDesc} to ${configName}\nWarning: Pull failed. Run 'lrn pull ${name}' to retry.`;
-    }
+    const pullArgs: ParsedArgs = {
+      ...args,
+      positional: [version ? `${name}@${version}` : name],
+      command: "pull",
+    };
+    await runPull(pullArgs, config);
+    writePackageEntry(target, name, spec);
+    return `Added ${name}@${sourceDesc} to ${configName}`;
   }
 
-  if (pathOpt || urlOpt) {
-    return `Added ${name} (${sourceDesc}) to ${configName}`;
-  }
-  return `Added ${name}@${sourceDesc} to ${configName}`;
+  // For path/url packages, write config immediately
+  writePackageEntry(target, name, spec);
+  return `Added ${name} (${sourceDesc}) to ${configName}`;
 }
