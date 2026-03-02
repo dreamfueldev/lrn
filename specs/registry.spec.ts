@@ -523,6 +523,145 @@ describe("Registry Commands", () => {
       expect(result.exitCode).not.toBe(0);
     });
 
+    it("pull without slash auto-selects clear winner", async () => {
+      writeCredentials(cacheDir, { registry: "https://uselrn.dev", token: "tok_admin", user: "Admin" });
+
+      const tarData = await createTestTarGz({ name: "react", version: "18.0.0", members: [], guides: [], schemas: {} });
+
+      globalThis.fetch = mock((url: string | URL | Request) => {
+        const u = typeof url === "string" ? url : url instanceof URL ? url.toString() : url.url;
+
+        if (u.includes("/resolve")) {
+          return Promise.resolve(
+            makeJson({
+              results: [
+                { domain: "dev.react", name: "react", fullName: "dev.react/react", description: "React UI library", classification: "library", score: 350 },
+                { domain: "com.reactnative", name: "react-native", fullName: "com.reactnative/react-native", description: "React Native", classification: "library", score: 60 },
+              ],
+            })
+          );
+        }
+
+        if (u.includes("/packages/dev.react/react@")) {
+          return Promise.resolve(
+            makeJson({
+              package: { domain: "dev.react", name: "react", aliases: [] },
+              version: {
+                version: "18.0.0",
+                publishedAt: "2024-01-01T00:00:00Z",
+                size: tarData.byteLength,
+                checksum: `sha256:${computeSha256(tarData)}`,
+                memberCount: 1,
+                guideCount: 0,
+              },
+              downloadUrl: "https://r2.example.com/react.tar.gz",
+            })
+          );
+        }
+
+        if (u.includes("/packages/dev.react/react")) {
+          return Promise.resolve(
+            makeJson({
+              package: { domain: "dev.react", name: "react", aliases: [] },
+              versions: [{
+                version: "18.0.0",
+                publishedAt: "2024-01-01T00:00:00Z",
+                size: tarData.byteLength,
+                checksum: `sha256:${computeSha256(tarData)}`,
+                memberCount: 1,
+                guideCount: 0,
+              }],
+            })
+          );
+        }
+
+        if (u.includes("r2.example.com")) {
+          return Promise.resolve(makeResponse(tarData));
+        }
+
+        return Promise.resolve(makeJson({ error: "not found" }, 404));
+      }) as typeof globalThis.fetch;
+
+      const result = await runCLI(["pull", "react"], { env: { LRN_CACHE: cacheDir } });
+      expect(result.exitCode).toBe(0);
+      expect(result.stdout).toContain("dev.react/react@18.0.0");
+    });
+
+    it("pull without slash with no matches shows error", async () => {
+      writeCredentials(cacheDir, { registry: "https://uselrn.dev", token: "tok", user: "u" });
+
+      globalThis.fetch = mock((url: string | URL | Request) => {
+        const u = typeof url === "string" ? url : url instanceof URL ? url.toString() : url.url;
+
+        if (u.includes("/resolve")) {
+          return Promise.resolve(makeJson({ results: [] }));
+        }
+
+        return Promise.resolve(makeJson({ error: "not found" }, 404));
+      }) as typeof globalThis.fetch;
+
+      const result = await runCLI(["pull", "nonexistent-pkg-xyz"], { env: { LRN_CACHE: cacheDir } });
+      expect(result.exitCode).not.toBe(0);
+      expect(result.stderr).toContain("No packages match");
+    });
+
+    it("pull with slash bypasses resolution", async () => {
+      writeCredentials(cacheDir, { registry: "https://uselrn.dev", token: "tok_admin", user: "Admin" });
+
+      const tarData = await createTestTarGz({ name: "react", version: "18.0.0", members: [], guides: [], schemas: {} });
+
+      globalThis.fetch = mock((url: string | URL | Request) => {
+        const u = typeof url === "string" ? url : url instanceof URL ? url.toString() : url.url;
+
+        if (u.includes("/resolve")) {
+          throw new Error("Should not call resolve for domain/name input");
+        }
+
+        if (u.includes("/packages/dev.react/react@")) {
+          return Promise.resolve(
+            makeJson({
+              package: { domain: "dev.react", name: "react", aliases: [] },
+              version: {
+                version: "18.0.0",
+                publishedAt: "2024-01-01T00:00:00Z",
+                size: tarData.byteLength,
+                checksum: `sha256:${computeSha256(tarData)}`,
+                memberCount: 1,
+                guideCount: 0,
+              },
+              downloadUrl: "https://r2.example.com/react.tar.gz",
+            })
+          );
+        }
+
+        if (u.includes("/packages/dev.react/react")) {
+          return Promise.resolve(
+            makeJson({
+              package: { domain: "dev.react", name: "react", aliases: [] },
+              versions: [{
+                version: "18.0.0",
+                publishedAt: "2024-01-01T00:00:00Z",
+                size: tarData.byteLength,
+                checksum: `sha256:${computeSha256(tarData)}`,
+                memberCount: 1,
+                guideCount: 0,
+              }],
+            })
+          );
+        }
+
+        if (u.includes("r2.example.com")) {
+          return Promise.resolve(makeResponse(tarData));
+        }
+
+        return Promise.resolve(makeJson({ error: "not found" }, 404));
+      }) as typeof globalThis.fetch;
+
+      const result = await runCLI(["pull", "dev.react/react"], { env: { LRN_CACHE: cacheDir } });
+      expect(result.exitCode).toBe(0);
+      expect(result.stdout).toContain("dev.react/react@18.0.0");
+    });
+
     it("verifies checksum and fails on mismatch", async () => {
       writeCredentials(cacheDir, { registry: "https://uselrn.dev", token: "tok_admin", user: "Admin" });
 

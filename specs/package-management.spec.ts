@@ -206,19 +206,19 @@ describe("Package Management", () => {
       });
     });
 
-    it("package@version stores version spec", async () => {
-      // This will fail the pull (no registry running) but should still store config
-      // Use domain/name format since bare names now trigger fuzzy resolution
+    it("package@version does not write config when pull fails", async () => {
+      // Pull fails (no auth), so config should NOT be written
       const result = await run(["add", "docs/stripe@^2024.1.0"], {
         cwd: tempDir,
         cacheDir,
       });
-      // Pull will fail (no auth), but config entry should persist
-      // The exitCode may be 0 (graceful failure) with a warning
-      const config = JSON.parse(
-        readFileSync(join(tempDir, "lrn.config.json"), "utf-8")
-      );
-      expect(config.packages["docs/stripe"]).toBe("^2024.1.0");
+      expect(result.exitCode).not.toBe(0);
+      // Config should not contain the failed package
+      const configPath = join(tempDir, "lrn.config.json");
+      if (existsSync(configPath)) {
+        const config = JSON.parse(readFileSync(configPath, "utf-8"));
+        expect(config.packages?.["docs/stripe"]).toBeUndefined();
+      }
     });
   });
 

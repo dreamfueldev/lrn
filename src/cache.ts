@@ -11,6 +11,7 @@ import type { Package, PackageSpec } from "./schema/index.js";
 import type { ResolvedConfig } from "./config.js";
 import { getPackagesDir } from "./config.js";
 import { PackageNotFoundError, CLIError, ExitCode, findSimilar } from "./errors.js";
+import { readCacheIndex } from "./cache-index.js";
 
 /**
  * Information about a cached package
@@ -88,9 +89,10 @@ export function listCachedPackages(config: ResolvedConfig): CachedPackageInfo[] 
  */
 export function loadPackage(
   config: ResolvedConfig,
-  name: string,
+  inputName: string,
   version?: string
 ): Package {
+  let name = inputName;
   // First check if there's a local path in config
   const spec = config.packages[name];
   if (spec && typeof spec === "object" && "path" in spec && spec.path) {
@@ -99,14 +101,25 @@ export function loadPackage(
 
   // Otherwise load from cache
   const packagesDir = getPackagesDir(config);
-  const pkgDir = join(packagesDir, name);
+  let pkgDir = join(packagesDir, name);
 
   if (!existsSync(pkgDir)) {
-    // Try to find similar package names for suggestion
-    const cached = listCachedPackages(config);
-    const names = cached.map((p) => p.name);
-    const similar = findSimilar(name, names);
-    throw new PackageNotFoundError(name, similar);
+    // If name has no slash, try local fuzzy resolution
+    if (!name.includes("/")) {
+      const resolved = resolveLocalPackage(config, name);
+      if (resolved) {
+        pkgDir = join(packagesDir, resolved);
+        // Update name for downstream use (version lookup, error messages)
+        name = resolved;
+      }
+    }
+
+    if (!existsSync(pkgDir)) {
+      const cached = listCachedPackages(config);
+      const names = cached.map((p) => p.name);
+      const similar = findSimilar(name, names);
+      throw new PackageNotFoundError(name, similar);
+    }
   }
 
   // Find the requested version or latest
@@ -258,4 +271,63 @@ export function packageExists(config: ResolvedConfig, name: string): boolean {
   const packagesDir = getPackagesDir(config);
   const pkgDir = join(packagesDir, name);
   return existsSync(pkgDir);
+}
+
+/**
+ * Resolve a short name (no slash) to a cached package's full name.
+ *
+ * Matches against:
+ * 1. Exact short name (part after /) — e.g. "tailwind" matches "tailwindcss" is NOT exact
+ * 2. Aliases from cache index — e.g. "tailwind" matches alias "tailwind" on com.tailwindcss/tailwindcss
+ * 3. Short name contains query — e.g. "tailwind" matches "tailwindcss"
+ *
+ * Returns the full name (domain/name) if a single match is found, null otherwise.
+ */
+function resolveLocalPackage(config: ResolvedConfig, query: string): string | null {
+  const cached = listCachedPackages(config);
+  if (cached.length === 0) return null;
+
+  const index = readCacheIndex(config.cache);
+  const q = query.toLowerCase();
+
+  // Score each cached package
+  const scored: Array<{ fullName: string; score: number }> = [];
+
+  for (const pkg of cached) {
+    const shortName = pkg.name.includes("/") ? pkg.name.split("/").pop()! : pkg.name;
+    const entry = index.packages[pkg.name];
+    let score = 0;
+
+    // Exact short name match
+    if (shortName.toLowerCase() === q) {
+      score = 100;
+    }
+    // Exact alias match
+    else if (entry?.aliases?.some((a) => a.toLowerCase() === q)) {
+      score = 90;
+    }
+    // Short name contains query
+    else if (shortName.toLowerCase().includes(q)) {
+      score = 50;
+    }
+    // Alias contains query
+    else if (entry?.aliases?.some((a) => a.toLowerCase().includes(q))) {
+      score = 40;
+    }
+
+    if (score > 0) {
+      scored.push({ fullName: pkg.name, score });
+    }
+  }
+
+  if (scored.length === 0) return null;
+
+  // Sort by score descending
+  scored.sort((a, b) => b.score - a.score);
+
+  // Auto-select if single match or clear winner (top >= 2x second)
+  if (scored.length === 1) return scored[0]!.fullName;
+  if (scored[0]!.score >= scored[1]!.score * 2) return scored[0]!.fullName;
+
+  return null;
 }
